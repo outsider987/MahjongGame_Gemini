@@ -139,85 +139,118 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     effects: []
   });
 
-  // React State for UI Overlays
   const [remainingTiles, setRemainingTiles] = useState(144);
   const [activePlayerIndex, setActivePlayerIndex] = useState(0);
   const [uiPlayers, setUiPlayers] = useState<Player[]>(INITIAL_PLAYERS);
   const [isMuted, setIsMuted] = useState(false);
-  
-  // Action Menu State
   const [availableActions, setAvailableActions] = useState<ActionType[]>([]);
 
-  // Helper to check actions for Human (Player 0)
+  // --- Game Logic Helpers ---
+  
+  const countTiles = (hand: Tile[], suit: Suit, value: number) => {
+      return hand.filter(t => t.suit === suit && t.value === value).length;
+  };
+
   const checkHumanActions = (discardedTile: Tile) => {
       const hand = gameRef.current.players[0].hand;
       const actions: ActionType[] = [];
       
-      // CHECK PONG (Pair matches discard)
-      const count = hand.filter(t => t.suit === discardedTile.suit && t.value === discardedTile.value).length;
+      const count = countTiles(hand, discardedTile.suit, discardedTile.value);
       if (count >= 2) actions.push('PONG');
-      
-      // CHECK KONG (Triplet matches discard)
       if (count === 3) actions.push('KONG');
-      
-      // CHECK HU (Simplistic Mock: Random chance if pair or set matches for demo fun)
-      if (count >= 1 && Math.random() > 0.9) actions.push('HU');
+      // Mock HU chance
+      if (count >= 1 && Math.random() > 0.95) actions.push('HU');
 
-      // Force add PONG for demo if deck is small (to ensure user sees it eventually)
-      if (gameRef.current.deck.length < 130 && actions.length === 0 && Math.random() > 0.7) {
+      // Demo Force: Ensure user sees options occasionally
+      if (gameRef.current.deck.length < 130 && actions.length === 0 && Math.random() > 0.8) {
           actions.push('PONG');
       }
-
       return actions;
   };
 
+  const checkForAiAction = (game: GameState, discardedTile: Tile, fromPlayer: number) => {
+      // Iterate 1..3 to check other players
+      for (let offset = 1; offset < 4; offset++) {
+          const pIdx = (fromPlayer + offset) % 4;
+          if (pIdx === 0) continue; // Skip Human
+          
+          const player = game.players[pIdx];
+          const c = countTiles(player.hand, discardedTile.suit, discardedTile.value);
+          
+          // AI Action Probabilities
+          if (c >= 2 && Math.random() < 0.5) { // 50% chance to Pong if pair exists
+               return { type: 'PONG' as ActionType, playerIdx: pIdx };
+          }
+          if (c === 3 && Math.random() < 0.7) {
+               return { type: 'KONG' as ActionType, playerIdx: pIdx };
+          }
+      }
+      
+      // Demo Cheat: Force an AI Pong occasionally if nothing happens for a while
+      if (Math.random() < 0.05 && fromPlayer !== 0) {
+         const nextAI = (fromPlayer + 1) % 4;
+         if (nextAI !== 0) return { type: 'PONG' as ActionType, playerIdx: nextAI };
+      }
+      
+      return null;
+  };
+
+  const executeAction = (game: GameState, playerIdx: number, action: ActionType, tile: Tile, fromIdx: number) => {
+      const player = game.players[playerIdx];
+      
+      // Remove tiles from hand
+      const toRemove = action === 'PONG' ? 2 : 3;
+      let removedCount = 0;
+      player.hand = player.hand.filter(t => {
+          if (removedCount < toRemove && t.suit === tile.suit && t.value === tile.value) {
+              removedCount++;
+              return false;
+          }
+          return true;
+      });
+
+      // Logic to ensure we actually removed tiles for the 'Demo Cheat' case where AI might not have them
+      // If cheat triggered and tiles missing, we just steal random tiles to keep hand size correct for demo visuals
+      if (removedCount < toRemove) {
+         for(let i=0; i<(toRemove - removedCount); i++) player.hand.pop();
+      }
+
+      // Add Meld
+      const meldTiles = Array(action === 'KONG' ? 4 : 3).fill(tile);
+      player.melds.push({ type: action, tiles: meldTiles, fromPlayer: fromIdx });
+
+      // Remove from Discard Pile (The last discarded tile)
+      game.players[fromIdx].discards.pop();
+
+      // Update Turn
+      game.turn = playerIdx;
+      game.state = 'DISCARD';
+      game.actionTimer = 60; // AI delay before discarding
+      
+      // FX
+      const fxX = playerIdx === 1 ? window.innerWidth - 150 : (playerIdx === 2 ? window.innerWidth/2 : 150);
+      const fxY = playerIdx === 1 ? window.innerHeight/2 : (playerIdx === 2 ? 150 : window.innerHeight/2);
+      
+      triggerEffect(game, 'TEXT', action === 'PONG' ? '碰' : '槓', fxX, fxY);
+      if (action === 'HU') triggerEffect(game, 'LIGHTNING', '胡', fxX, fxY);
+      triggerEffect(game, 'PARTICLES', undefined, fxX, fxY);
+  };
+
   const handlePlayerAction = (action: ActionType | 'PASS') => {
-      setAvailableActions([]); // Hide UI
+      setAvailableActions([]);
       const game = gameRef.current;
       const tile = game.lastDiscard?.tile;
-      
       if (action === 'PASS' || !tile) {
-          // Resume game
+          // If pass, check if AI wants it? Or just next turn. 
+          // For simplicity, Pass -> Next Turn.
           const nextPlayer = (game.lastDiscard!.playerIndex + 1) % 4;
           game.turn = nextPlayer;
           game.state = 'DRAW';
           return;
       }
       
-      // Execute Action
-      const playerIdx = 0; // Human
-      const player = game.players[playerIdx];
-      
-      // Visual Effect
-      triggerEffect(game, action === 'HU' ? 'LIGHTNING' : 'TEXT', action === 'HU' ? '胡' : (action === 'PONG' ? '碰' : '槓'));
-      triggerEffect(game, 'PARTICLES', undefined, window.innerWidth/2, window.innerHeight - 200);
-
-      if (action === 'PONG') {
-          // Remove 2 matching tiles
-          let removed = 0;
-          player.hand = player.hand.filter(t => {
-              if (removed < 2 && t.suit === tile.suit && t.value === tile.value) {
-                  removed++;
-                  return false;
-              }
-              return true;
-          });
-          // Add Meld
-          player.melds.push({ type: 'PONG', tiles: [tile, tile, tile], fromPlayer: game.lastDiscard!.playerIndex });
-          
-          // Turn becomes player's
-          game.turn = playerIdx;
-          game.state = 'DISCARD';
-          game.actionTimer = 300;
-          
-          // Remove from discards of previous player
-          const prevPlayer = game.players[game.lastDiscard!.playerIndex];
-          prevPlayer.discards.pop();
-      }
-      else if (action === 'HU') {
-          triggerEffect(game, 'LIGHTNING', '天胡');
-          game.state = 'THINKING'; // Freeze for effect
-      }
+      // Human Action
+      executeAction(game, 0, action, tile, game.lastDiscard!.playerIndex);
   };
   
   // FX Helpers
@@ -228,21 +261,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           text,
           x: x || 0,
           y: y || 0,
-          life: type === 'LIGHTNING' ? 20 : 60,
+          life: type === 'LIGHTNING' ? 25 : 50,
           particles: type === 'PARTICLES' ? createParticles(x || 0, y || 0) : undefined
       });
   };
 
   const createParticles = (x: number, y: number): Particle[] => {
       const pArr: Particle[] = [];
-      for(let i=0; i<30; i++) {
+      for(let i=0; i<25; i++) {
           pArr.push({
               x, y,
-              vx: (Math.random() - 0.5) * 15,
-              vy: (Math.random() - 0.5) * 15,
-              life: 40 + Math.random() * 20,
+              vx: (Math.random() - 0.5) * 20,
+              vy: (Math.random() - 0.5) * 20,
+              life: 30 + Math.random() * 20,
               color: Math.random() > 0.5 ? '#fbbf24' : '#fcd34d',
-              size: 5 + Math.random() * 8
+              size: 6 + Math.random() * 8
           });
       }
       return pArr;
@@ -254,14 +287,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     const sketch = (p: any) => {
       const TILE_W = 44; 
       const TILE_H = 60; 
-      const TILE_THICKNESS = 20;
       const BOTTOM_Y_OFFSET = 140; 
-      const TOP_Y_OFFSET = 140;
-      const SIDE_X_OFFSET = 160;
-      const RIVER_OFFSET_Y = 110;
-      const RIVER_OFFSET_X = 140;
-
-      // Hit Detection Globals
+      
+      // Globals for hit test
       let p0HandStartX = 0; 
       let hoveredTileIndex = -1;
 
@@ -286,13 +314,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         });
 
         gameRef.current = {
-          deck,
-          players,
-          turn: 0, 
-          state: 'DRAW', 
-          lastDiscard: null,
-          actionTimer: 0,
-          effects: []
+          deck, players, turn: 0, state: 'DRAW', lastDiscard: null, actionTimer: 0, effects: []
         };
         setRemainingTiles(deck.length);
         setAvailableActions([]);
@@ -303,7 +325,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         drawTable(p);
         drawTableInfo(p);
         
-        // --- Main Render Loop ---
         const activeIdx = gameRef.current.turn;
         gameRef.current.players.forEach((player, i) => {
            drawPlayer(p, player, i, i === activeIdx);
@@ -311,14 +332,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         });
 
         drawCenterCompass(p);
-        drawEffects(p); // Render FX layer
-
-        // --- Logic Loop ---
+        drawEffects(p); 
         updateGameLogic();
         updateHitTest(p);
 
-        // Sync UI
-        if (p.frameCount % 10 === 0) {
+        if (p.frameCount % 15 === 0) {
            setActivePlayerIndex(gameRef.current.turn);
            setRemainingTiles(gameRef.current.deck.length);
         }
@@ -327,60 +345,37 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       const updateGameLogic = () => {
           const game = gameRef.current;
           
-          // 1. DRAW STATE
           if (game.state === 'DRAW') {
-             if (game.deck.length === 0) return;
-             
+             if (game.deck.length === 0) return; // End game check
              const currentPlayer = game.players[game.turn];
-             // Ensure player has 17 tiles (16 + 1 draw)
              if (currentPlayer.hand.length % 3 === 1) { 
                  const newTile = game.deck.pop();
-                 if (newTile) {
-                     currentPlayer.hand.push(newTile);
-                 }
+                 if (newTile) currentPlayer.hand.push(newTile);
              }
              game.state = 'THINKING';
-             game.actionTimer = 10; 
+             game.actionTimer = 15; 
           }
-          
-          // 2. THINKING (Brief Pause)
           else if (game.state === 'THINKING') {
-              if (game.actionTimer > 0) {
-                  game.actionTimer--;
-                  return;
-              }
+              if (game.actionTimer > 0) { game.actionTimer--; return; }
               game.state = 'DISCARD';
-              game.actionTimer = 300; // 10 seconds
+              game.actionTimer = 300; 
           }
-          
-          // 3. DISCARD STATE (Waiting for player to throw)
           else if (game.state === 'DISCARD') {
               if (game.actionTimer > 0) game.actionTimer--;
-
-              // Auto Discard (Time limit)
               if (game.actionTimer <= 0) {
                   const currentHand = game.players[game.turn].hand;
                   handleDiscard(game.turn, currentHand.length - 1);
                   return;
               }
-
-              // AI Behavior (Simulated delay)
-              if (game.turn !== 0) {
-                   if (game.actionTimer === 270) { // Throw after 1 second
-                      const hand = game.players[game.turn].hand;
-                      const randIdx = Math.floor(Math.random() * hand.length);
-                      handleDiscard(game.turn, randIdx);
-                   }
+              if (game.turn !== 0 && game.actionTimer === 280) {
+                  const hand = game.players[game.turn].hand;
+                  handleDiscard(game.turn, Math.floor(Math.random() * hand.length));
               }
           }
-
-          // 4. INTERRUPT STATE (Check for Pong/Kong/Hu)
           else if (game.state === 'INTERRUPT') {
               if (game.actionTimer > 0) game.actionTimer--;
-              
-              // If timer runs out or handled by UI
               if (game.actionTimer <= 0 && availableActions.length === 0) {
-                  // No action taken, proceed to next player
+                   // Timeout, proceed
                   const nextPlayer = (game.lastDiscard!.playerIndex + 1) % 4;
                   game.turn = nextPlayer;
                   game.state = 'DRAW';
@@ -395,32 +390,32 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
           const discardedTile = player.hand.splice(tileIdx, 1)[0];
           player.discards.push(discardedTile);
-          player.hand.sort((a,b) => a.value - b.value);
+          player.hand.sort((a,b) => a.value - b.value); // Sort AI hands too to keep them neat
 
           game.lastDiscard = { tile: discardedTile, playerIndex: playerIdx };
           
-          // Determine Next Step
+          // 1. Check Human Interaction
           if (playerIdx !== 0) {
-              // AI Discarded -> Check if Human wants it
               const actions = checkHumanActions(discardedTile);
               if (actions.length > 0) {
-                  setAvailableActions(actions); // Trigger UI
+                  setAvailableActions(actions);
                   game.state = 'INTERRUPT';
-                  game.actionTimer = 300; // Give user time to think
+                  game.actionTimer = 300;
                   return;
               }
-              
-              // AI vs AI Interactions (Simulated)
-              if (Math.random() > 0.9) {
-                  // Randomly simulate an AI PONG
-                  triggerEffect(game, 'TEXT', '碰', 0, 0);
-                  // For simplicity in this demo, we don't change AI hand structure deeply, just show effect
-              }
+          }
+
+          // 2. Check AI Interaction (Simple Priority)
+          const aiAction = checkForAiAction(game, discardedTile, playerIdx);
+          if (aiAction) {
+             // Execute AI Action
+             executeAction(game, aiAction.playerIdx, aiAction.type, discardedTile, playerIdx);
+             return;
           }
           
-          // If no interruption, move to next player (handled in next frame logic to allow transition)
+          // 3. No interruptions -> Next Turn
           game.state = 'INTERRUPT'; 
-          game.actionTimer = 20; // Short pause before next turn if no one calls
+          game.actionTimer = 10; // Small pause before next draw
       };
 
       const drawEffects = (p: any) => {
@@ -432,34 +427,30 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
               if (fx.type === 'LIGHTNING') {
                    p.push();
                    p.stroke(0, 255, 255, fx.life * 10);
-                   p.strokeWeight(3);
+                   p.strokeWeight(4);
                    p.noFill();
-                   // Simple jagged line
                    p.beginShape();
-                   for(let k=0; k<p.width; k+=20) {
-                       p.vertex(k, p.height/2 + p.random(-50, 50));
+                   for(let k=0; k<p.width; k+=30) {
+                       p.vertex(k, p.height/2 + p.random(-80, 80));
                    }
                    p.endShape();
-                   // Flash background
                    p.noStroke();
-                   p.fill(255, 255, 255, fx.life * 2);
+                   p.fill(255, 255, 255, fx.life * 3);
                    p.rect(0, 0, p.width, p.height);
                    p.pop();
               } 
               else if (fx.type === 'TEXT') {
                    p.push();
-                   p.translate(p.width/2, p.height/2);
-                   const scale = p.map(fx.life, 60, 0, 0.5, 2);
+                   p.translate(fx.x || p.width/2, fx.y || p.height/2);
+                   const scale = p.map(fx.life, 50, 0, 0.8, 1.5);
                    p.scale(scale);
                    p.textAlign(p.CENTER, p.CENTER);
-                   p.textSize(120);
+                   p.textSize(100);
                    p.textStyle(p.BOLD);
-                   // Shadow
-                   p.fill(0, 0, 0, fx.life * 4);
-                   p.text(fx.text, 5, 5);
-                   // Main Text (Gold/Red)
-                   p.fill(255, 215, 0, fx.life * 5);
-                   p.stroke(255, 0, 0, fx.life * 5);
+                   p.fill(0, 0, 0, fx.life * 5);
+                   p.text(fx.text, 6, 6); // Shadow
+                   p.fill('#fbbf24');
+                   p.stroke('#b91c1c');
                    p.strokeWeight(4);
                    p.text(fx.text, 0, 0);
                    p.pop();
@@ -475,135 +466,83 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                   });
               }
 
-              if (fx.life <= 0) {
-                  game.effects.splice(i, 1);
-              }
+              if (fx.life <= 0) game.effects.splice(i, 1);
           }
       };
 
+      // --- Rendering ---
       const drawTable = (p: any) => {
         const ctx = p.drawingContext;
-        const gradient = ctx.createRadialGradient(p.width/2, p.height/2, 100, p.width/2, p.height/2, p.height * 0.8);
-        gradient.addColorStop(0, '#104f3a'); 
-        gradient.addColorStop(1, '#063325'); 
+        const gradient = ctx.createRadialGradient(p.width/2, p.height/2, 200, p.width/2, p.height/2, p.height);
+        gradient.addColorStop(0, '#0f4c3a'); 
+        gradient.addColorStop(1, '#022c22'); 
         ctx.fillStyle = gradient;
         p.noStroke();
         p.rect(0, 0, p.width, p.height);
-        
-        // Texture noise
-        p.push();
-        p.fill(255, 255, 255, 3);
-        for (let i = 0; i < p.width; i += 4) {
-            if (i % 8 === 0) p.rect(i, 0, 1, p.height);
-        }
-        p.pop();
-        
-        // Watermark
-        p.push();
-        p.translate(p.width/2, p.height/2 + 140);
-        p.textAlign(p.CENTER, p.CENTER);
-        p.textSize(64);
-        p.fill(0, 0, 0, 20);
-        p.text("麻將大師會所", 2, 2);
-        p.fill(255, 255, 255, 8);
-        p.text("麻將大師會所", 0, 0);
-        p.pop();
       };
 
       const drawTableInfo = (p: any) => {
-         const padding = 24;
-         const boxW = 180;
-         const boxH = 80;
-         const x = padding;
-         const y = padding + 60; 
-
          p.push();
-         p.translate(x, y);
-         p.fill(0, 0, 0, 60);
+         p.translate(24, 90);
+         p.fill(0, 0, 0, 80);
          p.stroke(COLORS.UI_BORDER_GOLD);
-         p.strokeWeight(1);
-         p.rect(0, 0, boxW, boxH, 12);
-         
+         p.rect(0, 0, 180, 80, 12);
          p.noStroke();
          p.fill('#fbbf24');
          p.textSize(14);
-         p.textAlign(p.LEFT, p.TOP);
-         p.text("CURRENT ROUND", 16, 12);
-         
+         p.text("CURRENT ROUND", 16, 12, 150);
          p.fill(255);
-         p.textSize(24);
+         p.textSize(22);
          p.textStyle(p.BOLD);
-         p.text("南風北局 (2/4)", 16, 34);
-         
-         p.stroke(255, 255, 255, 30);
-         p.line(140, 10, 140, 70);
-         
-         p.noStroke();
-         p.textAlign(p.CENTER, p.TOP);
-         p.textSize(10);
-         p.fill('#9ca3af');
-         p.text("REMAIN", 160, 16);
-         
+         p.text("南風北局 (2/4)", 16, 45);
          p.textSize(28);
          p.fill('#34d399'); 
-         p.text(gameRef.current.deck.length, 160, 32);
+         p.text(gameRef.current.deck.length, 130, 45);
          p.pop();
       };
 
       const drawCenterCompass = (p: any) => {
           p.push();
           p.translate(p.width/2, p.height/2 - 20);
-          const boxSize = 110;
-          p.fill(0, 0, 0, 180);
+          const boxSize = 120;
+          p.fill(0, 0, 0, 200);
           p.stroke(COLORS.UI_BORDER_GOLD);
           p.strokeWeight(2);
           p.rectMode(p.CENTER);
           p.rect(0, 0, boxSize, boxSize, 24);
           
           const timeLeft = Math.ceil(gameRef.current.actionTimer / 30);
-          // If Interrupt State, show "WAIT" or special indicator
           const isInterrupt = gameRef.current.state === 'INTERRUPT';
-
-          p.fill(timeLeft <= 3 ? '#ef4444' : COLORS.CYAN_LED);
+          
           p.noStroke();
-          p.textSize(isInterrupt ? 32 : 48); 
-          p.textStyle(p.BOLD);
           p.textAlign(p.CENTER, p.CENTER);
-          
-          if (isInterrupt) {
-              p.fill('#fbbf24');
-              p.text("!", 0, -10);
-              p.textSize(14);
-              p.text("CHECKING", 0, 20);
-          } else {
-              p.text(timeLeft, 0, 0); 
-          }
-          
+          p.textSize(40);
+          p.fill(isInterrupt ? '#fbbf24' : COLORS.CYAN_LED);
+          p.text(isInterrupt ? "!" : timeLeft, 0, 0);
+
           const turn = gameRef.current.turn;
-          const offset = boxSize/2 - 16;
+          const offset = boxSize/2 - 20;
           const positions = [
-             { label: gameRef.current.players[0].info.seatWind, x: 0, y: offset, idx: 0 }, 
-             { label: gameRef.current.players[1].info.seatWind, x: offset, y: 0, idx: 1 }, 
-             { label: gameRef.current.players[2].info.seatWind, x: 0, y: -offset, idx: 2 }, 
-             { label: gameRef.current.players[3].info.seatWind, x: -offset, y: 0, idx: 3 }  
+             { label: '南', x: 0, y: offset, idx: 0 }, 
+             { label: '西', x: offset, y: 0, idx: 1 }, 
+             { label: '北', x: 0, y: -offset, idx: 2 }, 
+             { label: '東', x: -offset, y: 0, idx: 3 }  
           ];
 
           const ctx = p.drawingContext;
           positions.forEach(pos => {
               p.push();
               p.translate(pos.x, pos.y);
-              const isActive = turn === pos.idx;
-              if (isActive) {
-                 ctx.shadowBlur = 10;
+              if (turn === pos.idx) {
+                 ctx.shadowBlur = 15;
                  ctx.shadowColor = '#fbbf24';
                  p.fill('#fbbf24');
-                 p.textSize(20);
+                 p.textSize(24);
               } else {
                  ctx.shadowBlur = 0;
-                 p.fill(255, 255, 255, 60);
-                 p.textSize(16);
+                 p.fill(255, 255, 255, 50);
+                 p.textSize(18);
               }
-              p.textAlign(p.CENTER, p.CENTER);
               p.textStyle(p.BOLD);
               p.text(pos.label, 0, 0);
               p.pop();
@@ -613,64 +552,65 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       
       const drawPlayer = (p: any, player: any, index: number, isActive: boolean) => {
          p.push();
-         const hand = player.hand;
-         const melds = player.melds;
+         
          const isSide = index === 1 || index === 3;
-         
-         const handTileW = isSide ? TILE_THICKNESS : TILE_W;
+         const handTileW = isSide ? 20 : TILE_W;
          const handTileH = TILE_H;
+         const meldTileW = TILE_W * 0.85;
+         const meldTileH = TILE_H * 0.85;
          
-         const meldTileW = TILE_W * 0.8;
-         const meldTileH = TILE_H * 0.8;
-         const MELD_GAP = 10;
-         const GROUP_GAP = 20;
-         const NEW_TILE_GAP = 20;
-         
-         let meldsWidth = 0;
-         melds.forEach((m: Meld) => {
-             meldsWidth += (m.tiles.length * meldTileW); 
-         });
-         if (melds.length > 0) meldsWidth += MELD_GAP;
-         
-         const handLen = hand.length;
-         const isNewTileState = handLen % 3 === 2; 
-         const gapW = isNewTileState ? NEW_TILE_GAP : 0;
-         const handWidth = (handLen * handTileW) + gapW;
-         const totalGroupWidth = meldsWidth + GROUP_GAP + handWidth;
-
          if (index === 0) { 
+             // P0 (Human)
              p.translate(p.width/2, p.height - BOTTOM_Y_OFFSET);
-             const startX = -totalGroupWidth / 2;
-             p0HandStartX = p.width/2 + startX + meldsWidth + GROUP_GAP;
+             const handW = (player.hand.length * TILE_W);
+             p0HandStartX = p.width/2 - handW / 2;
              
-             let cx = startX;
-             cx = drawMeldsSequence(p, melds, cx, 0, meldTileW, meldTileH, 1, 'FLAT');
-             cx += GROUP_GAP;
-             drawHandSequence(p, hand, cx, 0, handTileW, handTileH, 1, 'STANDING', isNewTileState, index);
+             // Draw Hand Centered
+             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'STANDING', player.hand.length % 3 === 2, 0);
+             
+             // Draw Melds Anchored Right (Fixed Position)
+             p.translate(p.width/2 - 100, 10); // Move to right corner area relative to center
+             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT'); // Grow Left
+             
          } else if (index === 1) {
-             p.translate(p.width - SIDE_X_OFFSET, p.height/2);
+             // P1 (Right)
+             p.translate(p.width - 140, p.height/2);
              p.rotate(p.HALF_PI); 
-             const startX = -totalGroupWidth / 2;
-             let cx = startX;
-             cx = drawMeldsSequence(p, melds, cx, 0, meldTileW, meldTileH, 1, 'FLAT');
-             cx += GROUP_GAP;
-             drawHandSequence(p, hand, cx, 0, handTileW, handTileH, 1, 'SIDE_STANDING', isNewTileState, index);
+             const handW = player.hand.length * handTileW;
+             
+             // Hand
+             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'SIDE_STANDING', player.hand.length % 3 === 2, 1);
+             
+             // Melds Anchored "Bottom" of P1 (which is screen bottom-ish)
+             // P1's "Right" is +X (Screen Down)
+             p.translate(p.height/2 - 100, 0); 
+             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT'); // Grow Up (Negative X in local space)
+             
          } else if (index === 2) {
-             p.translate(p.width/2, TOP_Y_OFFSET);
+             // P2 (Top)
+             p.translate(p.width/2, 100);
              p.rotate(p.PI); 
-             const startX = -totalGroupWidth / 2;
-             let cx = startX;
-             cx = drawMeldsSequence(p, melds, cx, 0, meldTileW, meldTileH, 1, 'FLAT');
-             cx += GROUP_GAP;
-             drawHandSequence(p, hand, cx, 0, handTileW, handTileH, 1, 'BACK_STANDING', isNewTileState, index);
+             const handW = player.hand.length * TILE_W;
+             
+             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'BACK_STANDING', player.hand.length % 3 === 2, 2);
+             
+             // Melds Anchored Left (Screen Left, which is P2's Right)
+             // P2's "Right" is +X (Screen Left)
+             p.translate(p.width/2 - 100, 0);
+             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT');
+
          } else if (index === 3) {
-             p.translate(SIDE_X_OFFSET, p.height/2);
+             // P3 (Left)
+             p.translate(140, p.height/2);
              p.rotate(-p.HALF_PI); 
-             const startX = totalGroupWidth / 2;
-             let cx = startX;
-             cx = drawMeldsSequence(p, melds, cx, 0, meldTileW, meldTileH, -1, 'FLAT');
-             cx -= GROUP_GAP;
-             drawHandSequence(p, hand, cx, 0, handTileW, handTileH, -1, 'SIDE_STANDING', isNewTileState, index);
+             const handW = player.hand.length * handTileW;
+
+             drawHandSequence(p, player.hand, handW/2, 0, handTileW, handTileH, -1, 'SIDE_STANDING', player.hand.length % 3 === 2, 3);
+             
+             // Melds Anchored "Bottom" (Screen Top)
+             // P3's "Right" is -X (Screen Up)
+             p.translate(-p.height/2 + 100, 0);
+             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, 1, 'FLAT');
          }
          p.pop();
       };
@@ -679,15 +619,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           const tiles = player.discards;
           if (tiles.length === 0) return;
           p.push();
-          const w = 34; 
-          const h = 46;
-          const cols = 6; 
+          const w = 34; const h = 46; const cols = 6; 
           p.translate(p.width/2, p.height/2);
+          const RIVER_OFFSET = 120;
           
-          if (index === 0) p.translate(0, RIVER_OFFSET_Y);
-          if (index === 1) { p.translate(RIVER_OFFSET_X, 0); p.rotate(-p.HALF_PI); }
-          if (index === 2) { p.translate(0, -RIVER_OFFSET_Y); p.rotate(p.PI); }
-          if (index === 3) { p.translate(-RIVER_OFFSET_X, 0); p.rotate(p.HALF_PI); }
+          if (index === 0) p.translate(0, RIVER_OFFSET);
+          if (index === 1) { p.translate(RIVER_OFFSET + 40, 0); p.rotate(-p.HALF_PI); }
+          if (index === 2) { p.translate(0, -RIVER_OFFSET); p.rotate(p.PI); }
+          if (index === 3) { p.translate(-RIVER_OFFSET - 40, 0); p.rotate(p.HALF_PI); }
           
           const startX = -(cols * w) / 2;
           tiles.forEach((tile: Tile, i: number) => {
@@ -698,21 +637,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           p.pop();
       }
 
-      const drawMeldsSequence = (p: any, melds: Meld[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'FLAT') => {
-          if (!melds || melds.length === 0) return startX;
+      // Fixed Anchor Meld Drawer
+      const drawMeldsFixed = (p: any, melds: Meld[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'FLAT') => {
+          if (!melds || melds.length === 0) return;
           let cx = startX;
-          const MELD_GAP = 10;
+          const MELD_GAP = 8;
+          
           melds.forEach(meld => {
              const count = meld.tiles.length;
+             // Draw tiles for this meld
              for(let i=0; i<count; i++) {
                  const drawX = dir === 1 ? cx : cx - w;
-                 drawTile(p, drawX, y + (60 * 0.8 - h), meld.tiles[i], w, h, type); // Align bottom
+                 // Align bottom of tile to y
+                 drawTile(p, drawX, y + (60 * 0.85 - h), meld.tiles[i], w, h, type); 
                  cx += (w * dir);
              }
              cx += (MELD_GAP * dir);
           });
-          cx -= (MELD_GAP * dir); 
-          return cx + (MELD_GAP * dir); 
       };
 
       const drawHandSequence = (p: any, hand: Tile[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'STANDING' | 'BACK_STANDING' | 'SIDE_STANDING', hasNewTile: boolean, playerIdx: number) => {
@@ -736,60 +677,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
          p.push();
          p.translate(x, y);
          const ctx = p.drawingContext;
-         const BACK_COLOR_DARK = '#064e3b'; 
-         const BACK_COLOR_LIGHT = '#10b981'; 
+         const BACK_COLOR = '#064e3b'; 
          const FACE_COLOR = '#fdfbf7'; 
          
          if (type === 'STANDING') {
              p.noStroke();
              p.fill(0,0,0, 60); p.rect(6, 6, w, h, 6); 
-             p.fill(BACK_COLOR_DARK); p.rect(0, 0, w, h, 6);
-             p.fill('#cbd5e1'); p.rect(0, -2, w, h, 6);
+             p.fill(BACK_COLOR); p.rect(0, 0, w, h, 6);
+             p.fill('#e2e8f0'); p.rect(0, -2, w, h, 6);
              p.fill(FACE_COLOR); p.rect(0, -4, w, h, 6);
-             const grd = ctx.createLinearGradient(0, -4, 0, h);
-             grd.addColorStop(0, 'rgba(255,255,255,0.9)');
-             grd.addColorStop(0.1, 'rgba(255,255,255,0.1)');
-             grd.addColorStop(1, 'rgba(0,0,0,0.1)');
-             ctx.fillStyle = grd;
-             p.rect(0, -4, w, h, 6);
              if (tile) drawTileFace(p, tile, w, h, -4);
-             
          } else if (type === 'FLAT') {
              p.noStroke();
              p.fill(0,0,0, 50); p.rect(3, 3, w, h, 4);
-             p.fill(BACK_COLOR_DARK); p.rect(0, 0, w, h, 4);
+             p.fill(BACK_COLOR); p.rect(0, 0, w, h, 4);
              p.fill(FACE_COLOR); p.rect(0, -5, w, h, 4); 
-             const grd = ctx.createLinearGradient(0, -5, w, h);
-             grd.addColorStop(0, 'rgba(255,255,255,0.5)');
-             grd.addColorStop(1, 'rgba(0,0,0,0.05)');
-             ctx.fillStyle = grd;
-             p.rect(0, -5, w, h, 4);
              if (tile) drawTileFace(p, tile, w, h, -5);
-
          } else if (type === 'BACK_STANDING') {
              p.noStroke();
              p.fill(0,0,0, 50); p.rect(4, 4, w, h, 5);
-             p.fill(BACK_COLOR_DARK); p.rect(0, 0, w, h, 5);
-             const grd = ctx.createLinearGradient(0, 0, 0, h/2);
-             grd.addColorStop(0, 'rgba(255,255,255,0.3)');
-             grd.addColorStop(1, 'rgba(255,255,255,0)');
-             ctx.fillStyle = grd;
-             p.rect(0, 0, w, h, 5);
-             
+             p.fill(BACK_COLOR); p.rect(0, 0, w, h, 5);
+             // Highlight
+             p.fill(255,255,255,40); p.rect(0,0,w,h/3,5,5,0,0);
          } else if (type === 'SIDE_STANDING') {
              p.noStroke();
              p.fill(0,0,0, 50); p.rect(3, 3, w, h, 2);
-             p.fill('#022c22'); p.rect(0, 0, w, h, 2);
-             p.fill(BACK_COLOR_LIGHT); p.rect(0, 0, w, 4, 2);
-             p.stroke('#000'); p.strokeWeight(1); p.noFill(); p.rect(0, 0, w, h);
-             p.noStroke();
-             const grd = ctx.createLinearGradient(0, 0, w, 0);
-             grd.addColorStop(0, 'rgba(0,0,0,0.3)');
-             grd.addColorStop(0.2, 'rgba(255,255,255,0.1)');
-             grd.addColorStop(0.5, 'rgba(0,0,0,0.1)');
-             grd.addColorStop(1, 'rgba(0,0,0,0.4)');
-             ctx.fillStyle = grd;
-             p.rect(0, 0, w, h, 2);
+             p.fill(BACK_COLOR); p.rect(0, 0, w, h, 2);
+             p.fill('#047857'); p.rect(0, 0, w, 4, 2); // Darker top
          }
          p.pop();
       };
@@ -824,17 +738,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
               displayStr = "✿"; subStr = `${tile.value}`; color = '#d97706'; 
           }
           const fontSizeMain = (tile.suit === Suit.CHARACTERS || tile.suit === Suit.WINDS) ? w * 0.65 : w * 0.75;
-          const fontSizeSub = w * 0.28;
           if (tile.suit === Suit.DRAGONS && tile.value === 3) {
                p.noFill(); p.stroke('#1e293b'); p.strokeWeight(2); p.rect(-w/3, -h/3, w*0.66, h*0.66); return;
           }
           p.textSize(fontSizeMain); p.textStyle(p.BOLD);
-          p.fill(255, 255, 255, 150); p.noStroke(); p.text(displayStr, 1, 1); 
           p.fill(color); p.text(displayStr, 0, 0);
           if (subStr) {
-              p.textSize(fontSizeSub); const subY = h * 0.3;
-              p.fill(255,255,255,150); p.text(subStr, 1, subY+1);
-              p.fill(color); p.text(subStr, 0, subY);
+              p.textSize(w * 0.28);
+              p.fill(color); p.text(subStr, 0, h*0.3);
           }
       };
 
@@ -925,7 +836,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       {availableActions.length > 0 && (
         <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
             <div className="flex gap-4 p-2 bg-black/60 backdrop-blur-xl rounded-2xl border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-                {/* Always show Pass if actions are available */}
+                {/* Always show Pass */}
                 <button 
                     onClick={() => handlePlayerAction('PASS')}
                     className="w-16 h-16 rounded-full bg-gray-700/80 hover:bg-gray-600 border-2 border-gray-500 text-white font-bold text-lg shadow-lg transition-transform hover:scale-110"
