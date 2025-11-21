@@ -1,0 +1,5 @@
+{
+  "name": "Copy of 麻將大師會所",
+  "description": "一個高擬真的麻將遊戲，擁有俱樂部大廳系統與基於 p5.js 的遊戲引擎，包含閃電與粒子爆發等特效。",
+  "requestFramePermissions": []
+}
