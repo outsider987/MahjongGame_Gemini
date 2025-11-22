@@ -120,59 +120,65 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
   // --- Effect System ---
   const triggerEffect = (type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP', text?: string, x?: number, y?: number, variant?: string, tile?: Tile) => {
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      
       effectsRef.current.push({
           id: Date.now() + Math.random(),
           type,
           variant,
           text,
           tile,
-          x: x || window.innerWidth / 2,
-          y: y || window.innerHeight / 2,
-          life: type === 'LIGHTNING' ? 25 : (type === 'SHOCKWAVE' ? 30 : 50),
-          particles: type === 'PARTICLES' ? createParticles(x || window.innerWidth/2, y || window.innerHeight/2, variant) : undefined
+          x: x || centerX,
+          y: y || centerY,
+          life: type === 'LIGHTNING' ? 20 : (type === 'SHOCKWAVE' ? 45 : 60),
+          particles: type === 'PARTICLES' ? createParticles(x || centerX, y || centerY, variant) : undefined
       });
   };
 
   const createParticles = (x: number, y: number, variant?: string) => {
       const pArr = [];
-      let count = 25;
-      let colors = ['#fbbf24', '#fcd34d']; // Default Gold
-      let speed = 10;
-      let gravity = 0;
+      let count = 30;
+      // Default Gold
+      let colors = ['#fbbf24', '#f59e0b', '#ffffff']; 
+      let speedBase = 8;
+      let spread = Math.PI * 2;
 
       if (variant === 'HU') {
-          count = 120;
-          colors = ['#ef4444', '#fbbf24', '#ffffff', '#b91c1c']; // Red, Gold, White, Dark Red
-          speed = 25;
-          gravity = 0.5;
+          count = 150;
+          colors = ['#ef4444', '#f87171', '#fbbf24', '#ffffff']; // Red & Gold
+          speedBase = 20;
       } else if (variant === 'BLUE') { // PONG
-          count = 40;
-          colors = ['#3b82f6', '#93c5fd', '#ffffff']; // Blue, Light Blue
-          speed = 15;
-      } else if (variant === 'PURPLE') { // KONG
           count = 50;
-          colors = ['#a855f7', '#d8b4fe', '#ffffff']; // Purple
-          speed = 18;
+          colors = ['#3b82f6', '#60a5fa', '#93c5fd', '#ffffff']; 
+          speedBase = 12;
+      } else if (variant === 'PURPLE') { // KONG
+          count = 60;
+          colors = ['#a855f7', '#c084fc', '#e9d5ff', '#ffffff'];
+          speedBase = 15;
       } else if (variant === 'GREEN') { // CHOW
-          count = 30;
-          colors = ['#10b981', '#6ee7b7'];
-          speed = 12;
+          count = 40;
+          colors = ['#10b981', '#34d399', '#6ee7b7'];
+          speedBase = 10;
       }
 
       for(let i=0; i<count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const v = Math.random() * speed;
-          const r = Math.random() * speed; 
+          const angle = Math.random() * spread;
+          // Explosion power
+          const power = Math.random() * speedBase + (Math.random() * speedBase * 0.5); 
           
           pArr.push({
               x, y,
-              vx: Math.cos(angle) * v,
-              vy: Math.sin(angle) * v,
-              life: 40 + Math.random() * 20,
-              maxLife: 60,
+              vx: Math.cos(angle) * power,
+              vy: Math.sin(angle) * power,
+              life: 50 + Math.random() * 30,
+              maxLife: 80,
               color: colors[Math.floor(Math.random() * colors.length)],
-              size: 6 + Math.random() * 8,
-              gravity: gravity
+              size: 5 + Math.random() * 10,
+              gravity: 0.2 + Math.random() * 0.2,
+              drag: 0.94, // Friction
+              rotation: Math.random() * Math.PI,
+              vRot: (Math.random() - 0.5) * 0.2
           });
       }
       return pArr;
@@ -180,7 +186,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
   // --- Interaction Handlers ---
   const handleDiscard = (tileIndex: number) => {
-      // Optimistic update to UI
       selectedTileRef.current = -1;
       socketService.sendDiscard(tileIndex);
   };
@@ -200,7 +205,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       p.setup = () => {
         const canvas = p.createCanvas(window.innerWidth, window.innerHeight);
         canvas.parent(renderRef.current!);
-        p.frameRate(30);
+        p.frameRate(60); // Higher frame rate for smooth particles
         p.textFont("'Noto Serif TC', 'Roboto', serif");
         AssetLoader.generateAll(p);
       };
@@ -212,7 +217,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       p.draw = () => {
         globalScale = Math.min(1.2, Math.max(0.6, p.width / 1280));
         
-        // Merge GameState (Backend) + Effects (Frontend Animation) for rendering
         const renderState = {
             ...gameRef.current,
             effects: effectsRef.current
@@ -233,29 +237,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       };
 
       p.mousePressed = () => {
-          // 1. Basic State Checks
           const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
           const isRichii = gameRef.current.players[0]?.info.isRichii;
 
-          // If clicked outside or invalid state, deselect
           if (!isMyTurn || !canDiscard || isRichii) {
              selectedTileRef.current = -1;
              return;
           }
 
           if (hoveredTileRef.current !== -1) {
-               // Interaction Logic: Select -> Confirm
                if (selectedTileRef.current === hoveredTileRef.current) {
-                   // Clicked on already selected tile -> Action: Discard
                    handleDiscard(hoveredTileRef.current);
-                   hoveredTileRef.current = -1; // Reset hover to prevent immediate re-trigger
+                   hoveredTileRef.current = -1; 
                } else {
-                   // Clicked on a new tile -> Action: Select
                    selectedTileRef.current = hoveredTileRef.current;
                }
           } else {
-              // Clicked on background (within canvas) -> Action: Deselect
               selectedTileRef.current = -1;
           }
       };
@@ -267,8 +265,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
           const isRichii = gameRef.current.players[0]?.info.isRichii;
           
-          // Allow hover even if not turn, for inspecting tiles (future feature), but for now restrict to turn
-          // Actually, allowing hover anytime feels better, but only select if turn.
           if (!isMyTurn || !canDiscard || isRichii) return;
 
           const mX = p.mouseX;
@@ -277,7 +273,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           
           const { p0HandStartX, p0TileW } = hitTestMetrics.current;
           
-          // Expanded hit area for better UX
           if (mY > handY - 80 && mY < handY + 80) {
               if (p0HandStartX !== 0) {
                   const relativeX = mX - p0HandStartX;
@@ -289,7 +284,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                       const normalWidth = (isNewTileState ? p0HandLen - 1 : p0HandLen) * effectiveW;
                       
                       if (isNewTileState && relativeX > normalWidth) {
-                          // The extra tile (newly drawn)
                           if (relativeX > normalWidth + (10 * scale)) hoveredTileRef.current = p0HandLen - 1;
                       } else if (relativeX <= normalWidth) {
                            const idx = Math.floor(relativeX / effectiveW);
@@ -314,7 +308,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef}>
       
-      {/* --- Floating Info Capsule (Top Left) --- */}
       <div className="absolute top-4 left-4 z-50 flex items-center gap-3 animate-fade-in">
            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg transition-all hover:bg-black/60 cursor-default group select-none">
                <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${isConnected ? 'bg-green-500 text-green-500' : 'bg-red-500 text-red-500'} animate-pulse`}></span>
@@ -324,7 +317,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
            </div>
       </div>
 
-      {/* --- Collapsible System Menu (Top Right) --- */}
       <div className="absolute top-4 right-4 z-50">
            <button 
                onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -338,7 +330,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                {isMenuOpen ? <X size={20} /> : <Settings size={20} />} 
            </button>
 
-           {/* Dropdown Panel */}
            {isMenuOpen && (
                <div className="absolute right-0 top-14 w-60 bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl border border-yellow-600/30 shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden animate-[slideIn_0.2s_ease-out] origin-top-right">
                    <div className="p-4 border-b border-white/5">
@@ -380,13 +371,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                    </div>
                    
                    <div className="bg-black/40 p-2 text-center border-t border-white/5">
-                       <p className="text-[10px] text-gray-600 font-mono">Mahjong Master v1.0.4</p>
+                       <p className="text-[10px] text-gray-600 font-mono">Mahjong Master v1.0.5</p>
                    </div>
                </div>
            )}
       </div>
 
-      {/* Players Overlay */}
       {gameRef.current.players.map((pData, i) => {
           let pos: 'bottom'|'right'|'top'|'left' = 'bottom';
           if (i === 0) pos = 'bottom';
@@ -404,7 +394,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           );
       })}
 
-      {/* Action Buttons Overlay */}
       {availableActions.length > 0 && (
         <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
             <div className="flex gap-4 p-2 bg-black/60 backdrop-blur-xl rounded-2xl border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
@@ -415,13 +404,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                     過
                 </button>
                 {availableActions.includes('CHOW') && (
-                   <button onClick={() => handlePlayerAction('CHOW')} className="w-20 h-20 bg-green-600 text-white font-black text-3xl rounded-full border-4 border-green-400 hover:scale-110 transition-transform">吃</button>
+                   <button onClick={() => handlePlayerAction('CHOW')} className="w-20 h-20 bg-green-600 text-white font-black text-3xl rounded-full border-4 border-green-400 hover:scale-110 transition-transform shadow-[0_0_20px_#10b981]">吃</button>
                 )}
                 {availableActions.includes('PONG') && (
-                   <button onClick={() => handlePlayerAction('PONG')} className="w-20 h-20 bg-blue-600 text-white font-black text-3xl rounded-full border-4 border-blue-400 hover:scale-110 transition-transform">碰</button>
+                   <button onClick={() => handlePlayerAction('PONG')} className="w-20 h-20 bg-blue-600 text-white font-black text-3xl rounded-full border-4 border-blue-400 hover:scale-110 transition-transform shadow-[0_0_20px_#3b82f6]">碰</button>
                 )}
                 {availableActions.includes('KONG') && (
-                   <button onClick={() => handlePlayerAction('KONG')} className="w-20 h-20 bg-purple-600 text-white font-black text-3xl rounded-full border-4 border-purple-400 hover:scale-110 transition-transform">槓</button>
+                   <button onClick={() => handlePlayerAction('KONG')} className="w-20 h-20 bg-purple-600 text-white font-black text-3xl rounded-full border-4 border-purple-400 hover:scale-110 transition-transform shadow-[0_0_20px_#a855f7]">槓</button>
                 )}
                 {availableActions.includes('RICHII') && (
                    <button onClick={() => handlePlayerAction('RICHII')} className="w-24 h-24 -mt-4 bg-orange-600 text-yellow-100 font-black text-3xl rounded-full border-4 border-orange-400 hover:scale-110 transition-transform animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.8)] flex flex-col items-center justify-center">
@@ -436,13 +425,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         </div>
       )}
       
-      {/* Connection Notice if not connected */}
       {!isConnected && (
           <div className="absolute inset-0 z-40 bg-black/50 flex items-center justify-center">
               <div className="bg-gray-900 p-6 rounded-xl border border-red-500 text-center">
                   <h2 className="text-red-500 text-xl font-bold mb-2">無法連線至後端伺服器</h2>
                   <p className="text-gray-300 text-sm mb-4">請確認您的 Go 後端服務已在 Port 8080 啟動。</p>
-                  <p className="text-gray-500 text-xs font-mono">SocketService: connecting to localhost:8080...</p>
               </div>
           </div>
       )}
@@ -477,7 +464,6 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isS
       </div>
       <div className={`flex flex-col ${isSelf ? 'items-start order-2 mb-2' : (position === 'right' ? 'items-end mr-1' : (position === 'left' ? 'items-start ml-1' : 'items-center'))} z-0`}>
          <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 shadow-lg relative">
-            {/* Riichi Tag */}
             {player.isRichii && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow border border-red-400 whitespace-nowrap animate-bounce">
                     立直

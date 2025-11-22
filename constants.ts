@@ -1,4 +1,6 @@
 
+
+
 export const COLORS = {
   // Screenshot Palette
   TABLE_BG_DARK: '#052e23', // Deep Emerald
@@ -10,26 +12,53 @@ export const COLORS = {
   UI_BORDER_GOLD: '#d4af37',
   
   // Realistic Material Colors
-  TILE_BACK_MAIN: '#047857', // Jade Green (Emerald 600)
-  TILE_BACK_LIGHT: '#10b981', // Lighter Jade (Emerald 500)
-  TILE_BACK_DARK: '#064e3b', // Dark edge (Emerald 800)
+  // Jade Backing
+  TILE_JADE_DEEP: '#022c22',  // Darkest shadow
+  TILE_JADE_MAIN: '#047857',  // Base color
+  TILE_JADE_LIGHT: '#10b981', // Subsurface light
   
-  TILE_FACE_MAIN: '#fdfbf7', // Ivory / Bone
-  TILE_FACE_SHADOW: '#cbd5e1', // Side of the bone
+  // Bone/Ivory Face
+  TILE_BONE_WARM: '#fcfbf7',  // Main face color (slightly cream)
+  TILE_BONE_SHADOW: '#e2e8f0', // Edges/Shadows
+  TILE_BONE_HIGHLIGHT: '#ffffff', // Specular
+  
+  // Lighting
+  SHADOW_DROP: 'rgba(0,0,0,0.6)',
+  SHADOW_AMBIENT: 'rgba(0,0,0,0.3)',
+  HIGHLIGHT_SPECULAR: 'rgba(255,255,255,0.7)',
+  HIGHLIGHT_EDGE: 'rgba(255,255,255,0.4)',
   
   // Split View Section Colors
-  TILE_SECTION_BONE: '#f1f5f9', // Slate 100 (Ivory look)
-  TILE_SECTION_BAMBOO: '#065f46', // Emerald 800 (Darker Jade)
-  TILE_SECTION_BAMBOO_LIGHT: '#059669', // Emerald 600 (Highlight)
-  
-  TILE_SIDE_HIGHLIGHT: 'rgba(255,255,255,0.4)',
-  TILE_SHADOW: 'rgba(0,0,0,0.4)',
+  TILE_SECTION_BONE: '#f1f5f9', 
+  TILE_SECTION_BAMBOO: '#065f46', 
+  TILE_SECTION_BAMBOO_LIGHT: '#059669', 
   
   GOLD_TEXT: '#fbbf24', // Amber 400
   SCORE_PLUS: '#4ade80', // Green 400
   SCORE_MINUS: '#f87171', // Red 400
   
   CYAN_LED: '#22d3ee', // Cyan 400
+
+  // --- NEW EFFECT PALETTES ---
+  FX_GOLD_CORE: '#fff7ed',
+  FX_GOLD_GLOW: '#f59e0b',
+  FX_GOLD_OUTER: '#b45309',
+  
+  FX_BLUE_CORE: '#eff6ff',
+  FX_BLUE_GLOW: '#3b82f6',
+  FX_BLUE_OUTER: '#1e3a8a',
+  
+  FX_PURPLE_CORE: '#faf5ff',
+  FX_PURPLE_GLOW: '#a855f7',
+  FX_PURPLE_OUTER: '#581c87',
+  
+  FX_RED_CORE: '#fef2f2',
+  FX_RED_GLOW: '#ef4444',
+  FX_RED_OUTER: '#7f1d1d',
+  
+  FX_GREEN_CORE: '#f0fdf4',
+  FX_GREEN_GLOW: '#10b981',
+  FX_GREEN_OUTER: '#064e3b',
 };
 
 export const TILES_COUNT = 144;

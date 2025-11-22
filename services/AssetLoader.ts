@@ -1,35 +1,34 @@
 
+
 import { Suit, Tile } from '../types';
 
 export class AssetLoader {
   private static images: Record<string, any> = {};
   private static woodTexture: any = null;
+  private static boneTexture: any = null;
   
   // Texture resolution (Higher = sharper)
-  private static TEX_W = 128; // Increased for quality
-  private static TEX_H = 160;
+  private static TEX_W = 256; // Increased for high fidelity
+  private static TEX_H = 320;
 
   private static colors = {
-    RED: '#c62828',   // Darker Red
-    GREEN: '#2e7d32', // Forest Green
-    BLUE: '#1565c0',  // Deep Blue
-    BLACK: '#212121'
+    RED: '#b91c1c',   // Deep Red (Engraved ink look)
+    GREEN: '#15803d', // Deep Green
+    BLUE: '#1d4ed8',  // Deep Blue
+    BLACK: '#171717'  // Ink Black
   };
 
-  /**
-   * Maps a Tile object to the specific key.
-   */
   private static getAssetKey(suit: Suit, value: number): string {
     return `${suit}_${value}`;
   }
 
-  /**
-   * Generates all tile assets programmatically.
-   * Call this in p5.setup() or p5.preload().
-   */
   static generateAll(p: any) {
     this.images = {};
     
+    // Generate Materials
+    this.woodTexture = this.createWoodTexture(p);
+    this.boneTexture = this.createBoneNoise(p);
+
     // 1. Dots (Pin)
     for (let i = 1; i <= 9; i++) {
       this.images[this.getAssetKey(Suit.DOTS, i)] = this.createDotTile(p, i);
@@ -60,14 +59,8 @@ export class AssetLoader {
     for (let i = 1; i <= 8; i++) {
         this.images[this.getAssetKey(Suit.FLOWERS, i)] = this.createFlowerTile(p, i);
     }
-
-    // 7. Backgrounds
-    this.woodTexture = this.createWoodTexture(p);
   }
 
-  /**
-   * Retrieves the p5 image object for a given tile.
-   */
   static getTileImage(tile: Tile): any | null {
     const key = this.getAssetKey(tile.suit, tile.value);
     return this.images[key] || null;
@@ -77,25 +70,47 @@ export class AssetLoader {
       return this.woodTexture;
   }
 
-  // --- Procedural Drawing Helpers ---
+  static getBoneTexture(): any | null {
+      return this.boneTexture;
+  }
+
+  // --- Procedural Textures ---
+
+  private static createBoneNoise(p: any) {
+      const w = 256; 
+      const h = 320;
+      const g = p.createGraphics(w, h);
+      
+      g.noStroke();
+      // Subtle Perlin noise for organic imperfection
+      for(let x=0; x<w; x+=4) {
+          for(let y=0; y<h; y+=4) {
+              const n = p.noise(x*0.02, y*0.02);
+              const alpha = p.map(n, 0, 1, 0, 15); // Very subtle
+              g.fill(0, 0, 0, alpha);
+              g.rect(x, y, 4, 4);
+              
+              // Occasional "grain" line
+              if (p.random() > 0.99) {
+                   g.fill(139, 69, 19, 10); // Faint brown grain
+                   g.rect(x, y, p.random(10, 30), 2);
+              }
+          }
+      }
+      return g;
+  }
 
   private static createWoodTexture(p: any) {
     const w = 512;
     const h = 512;
     const g = p.createGraphics(w, h);
     
-    // 1. Base Dark Wood Color
     g.background('#2a1b0e'); 
 
-    // 2. Wood Grain Texture
     g.noFill();
-    
-    // Draw Grain Lines
     for (let i = 0; i < 300; i++) {
-       // Lighter Highlights
        g.stroke(255, 255, 255, p.random(2, 5));
        g.strokeWeight(p.random(1, 3));
-       
        let y = p.random(h);
        g.beginShape();
        for(let x=0; x<=w; x+=30) {
@@ -104,7 +119,6 @@ export class AssetLoader {
        }
        g.endShape();
 
-       // Darker Grooves
        g.stroke(0, 0, 0, p.random(20, 60));
        g.strokeWeight(p.random(1, 4));
        y = p.random(h);
@@ -115,50 +129,14 @@ export class AssetLoader {
        }
        g.endShape();
     }
-
-    // 3. Subtle Geometric Pattern (Lattice Overlay)
-    g.stroke('#d4af37'); // Gold
-    g.strokeWeight(1);
-    g.noFill();
-    
-    const size = 128;
-    const alpha = 15; // Very faint
-
-    for(let y = 0; y < h; y += size) {
-        for(let x = 0; x < w; x += size) {
-            // Corner flourishes
-            g.stroke(212, 175, 55, alpha);
-            const padding = 10;
-            const len = 20;
-            
-            // Top-Left
-            g.line(x + padding, y + padding, x + padding + len, y + padding);
-            g.line(x + padding, y + padding, x + padding, y + padding + len);
-            
-            // Top-Right
-            g.line(x + size - padding, y + padding, x + size - padding - len, y + padding);
-            g.line(x + size - padding, y + padding, x + size - padding, y + padding + len);
-
-            // Bottom-Left
-            g.line(x + padding, y + size - padding, x + padding + len, y + size - padding);
-            g.line(x + padding, y + size - padding, x + padding, y + size - padding - len);
-
-            // Bottom-Right
-            g.line(x + size - padding, y + size - padding, x + size - padding - len, y + size - padding);
-            g.line(x + size - padding, y + size - padding, x + size - padding, y + size - padding - len);
-            
-            // Center Dot
-            g.stroke(212, 175, 55, alpha * 1.5);
-            g.point(x + size/2, y + size/2);
-        }
-    }
-    
     return g;
   }
 
+  // --- Tile Face Generators ---
+
   private static createBase(p: any) {
     const g = p.createGraphics(this.TEX_W, this.TEX_H);
-    g.clear(); // Transparent background
+    g.clear(); 
     return g;
   }
 
@@ -168,25 +146,30 @@ export class AssetLoader {
     const cx = this.TEX_W / 2;
     const cy = this.TEX_H / 2;
     
-    // Scaling factor for higher res
-    const S = 1.2;
-    const L = 30 * S; 
+    const S = 2.0; // Upscale for new resolution
     const M = 22 * S; 
     
     const drawCircle = (x: number, y: number, size: number, color: string, concentric = false) => {
-        // Add subtle shadow/gradient to ink
-        g.drawingContext.shadowColor = "rgba(0,0,0,0.2)";
+        // Engraved look: Inner shadow
+        g.drawingContext.shadowColor = "rgba(0,0,0,0.3)";
         g.drawingContext.shadowBlur = 2;
+        g.drawingContext.shadowOffsetY = 2;
         
         g.fill(color);
         g.circle(x, y, size);
         
-        g.drawingContext.shadowBlur = 0; // Reset
+        g.drawingContext.shadowBlur = 0;
+        g.drawingContext.shadowOffsetY = 0;
+        
+        // Shine on ink
+        g.noStroke();
+        g.fill(255, 255, 255, 50);
+        g.circle(x - size*0.2, y - size*0.2, size*0.3);
 
         if (concentric) {
             g.noFill();
             g.stroke(255, 200);
-            g.strokeWeight(3);
+            g.strokeWeight(4);
             g.circle(x, y, size * 0.7);
             g.noStroke();
             g.fill(color);
@@ -194,37 +177,50 @@ export class AssetLoader {
         }
     };
 
-    // (Logic remains largely same, just adjusted positions for new Aspect Ratio)
+    // Map layouts (Simplified for brevity, similar to logic in prev impl but scaled)
+    // Reusing logic structure but adapting scales
+    const yStep = 35 * S;
+    const xStep = 30 * S;
+
     if (value === 1) {
         drawCircle(cx, cy, 60 * S, this.colors.RED, true);
-        g.stroke(255); g.strokeWeight(2); g.noFill();
-        for(let r=0; r<Math.PI*2; r+=Math.PI/4) {
-             g.line(cx + Math.cos(r)*15, cy+Math.sin(r)*15, cx+Math.cos(r)*25, cy+Math.sin(r)*25);
-        }
+        // Fancy decoration for 1 Dot
+        g.noFill(); g.stroke(0, 50); g.strokeWeight(2);
+        g.circle(cx, cy, 75 * S);
     } else if (value === 2) {
-        drawCircle(cx, cy - 35, M, this.colors.GREEN);
-        drawCircle(cx, cy + 35, M, this.colors.BLUE);
+        drawCircle(cx, cy - yStep, M, this.colors.GREEN);
+        drawCircle(cx, cy + yStep, M, this.colors.BLUE);
     } else if (value === 3) {
-        drawCircle(cx - 30, cy - 40, M, this.colors.BLUE);
+        drawCircle(cx - xStep, cy - yStep, M, this.colors.BLUE);
         drawCircle(cx, cy, M, this.colors.RED);
-        drawCircle(cx + 30, cy + 40, M, this.colors.GREEN);
+        drawCircle(cx + xStep, cy + yStep, M, this.colors.GREEN);
     } else if (value === 4) {
-        [ -25, 25 ].forEach(x => { [ -30, 30 ].forEach(y => drawCircle(cx + x, cy + y, M, y < 0 ? this.colors.BLUE : this.colors.GREEN)); });
+        drawCircle(cx - xStep, cy - yStep, M, this.colors.BLUE); drawCircle(cx + xStep, cy - yStep, M, this.colors.GREEN);
+        drawCircle(cx - xStep, cy + yStep, M, this.colors.GREEN); drawCircle(cx + xStep, cy + yStep, M, this.colors.BLUE);
     } else if (value === 5) {
-        [ -28, 28 ].forEach(x => { [ -35, 35 ].forEach(y => drawCircle(cx + x, cy + y, M, y < 0 ? this.colors.BLUE : this.colors.GREEN)); });
+        drawCircle(cx - xStep, cy - yStep, M, this.colors.GREEN); drawCircle(cx + xStep, cy - yStep, M, this.colors.BLUE);
         drawCircle(cx, cy, M, this.colors.RED);
+        drawCircle(cx - xStep, cy + yStep, M, this.colors.BLUE); drawCircle(cx + xStep, cy + yStep, M, this.colors.GREEN);
     } else if (value === 6) {
-        [ -24, 24 ].forEach(x => { [ -40, 0, 40 ].forEach(y => drawCircle(cx + x, cy + y, M, this.colors.GREEN)); });
-        g.fill(this.colors.RED); g.circle(cx - 24, cy - 40, M); g.circle(cx + 24, cy - 40, M);
+        drawCircle(cx - xStep*0.8, cy - yStep, M, this.colors.GREEN); drawCircle(cx + xStep*0.8, cy - yStep, M, this.colors.GREEN);
+        drawCircle(cx - xStep*0.8, cy, M, this.colors.RED); drawCircle(cx + xStep*0.8, cy, M, this.colors.RED);
+        drawCircle(cx - xStep*0.8, cy + yStep, M, this.colors.RED); drawCircle(cx + xStep*0.8, cy + yStep, M, this.colors.RED);
     } else if (value === 7) {
-        drawCircle(cx - 28, cy - 45, 20, this.colors.GREEN);
-        drawCircle(cx, cy - 35, 20, this.colors.GREEN);
-        drawCircle(cx + 28, cy - 25, 20, this.colors.GREEN);
-        [ -22, 22 ].forEach(x => { [ 15, 45 ].forEach(y => drawCircle(cx + x, cy + y, M, this.colors.RED)); });
+        drawCircle(cx - xStep*0.8, cy - yStep*1.2, M*0.9, this.colors.GREEN); drawCircle(cx, cy - yStep*1.1, M*0.9, this.colors.GREEN); drawCircle(cx + xStep*0.8, cy - yStep*1.2, M*0.9, this.colors.GREEN);
+        drawCircle(cx - xStep*0.8, cy, M, this.colors.RED); drawCircle(cx + xStep*0.8, cy, M, this.colors.RED);
+        drawCircle(cx - xStep*0.8, cy + yStep, M, this.colors.RED); drawCircle(cx + xStep*0.8, cy + yStep, M, this.colors.RED);
     } else if (value === 8) {
-        [ -24, 24 ].forEach(x => { [ -40, -14, 14, 40 ].forEach(y => drawCircle(cx + x, cy + y, M, this.colors.BLUE)); });
+        drawCircle(cx - xStep*0.8, cy - yStep*1.2, M, this.colors.BLUE); drawCircle(cx + xStep*0.8, cy - yStep*1.2, M, this.colors.BLUE);
+        drawCircle(cx - xStep*0.8, cy - yStep*0.4, M, this.colors.BLUE); drawCircle(cx + xStep*0.8, cy - yStep*0.4, M, this.colors.BLUE);
+        drawCircle(cx - xStep*0.8, cy + yStep*0.4, M, this.colors.BLUE); drawCircle(cx + xStep*0.8, cy + yStep*0.4, M, this.colors.BLUE);
+        drawCircle(cx - xStep*0.8, cy + yStep*1.2, M, this.colors.BLUE); drawCircle(cx + xStep*0.8, cy + yStep*1.2, M, this.colors.BLUE);
     } else if (value === 9) {
-         [ -30, 0, 30 ].forEach(x => { [ -35, 0, 35 ].forEach(y => drawCircle(cx + x, cy + y, M, this.colors.RED)); });
+        for(let r=0; r<3; r++) {
+            for(let c=0; c<3; c++) {
+                const col = r === 0 ? this.colors.BLUE : (r === 1 ? this.colors.RED : this.colors.GREEN);
+                drawCircle(cx + (c-1)*xStep, cy + (r-1)*yStep, M, col);
+            }
+        }
     }
     return g;
   }
@@ -238,57 +234,50 @@ export class AssetLoader {
         g.fill(color);
         g.noStroke();
         g.rectMode(p.CENTER);
-        g.rect(x, y, 7, len, 3);
-        g.fill(255, 255, 255, 150);
-        g.rect(x, y - len/4, 7, 2);
-        g.rect(x, y + len/4, 7, 2);
+        // Stick Body
+        g.rect(x, y, 12, len, 6);
+        // Highlight
+        g.fill(255, 255, 255, 100);
+        g.rect(x, y, 4, len - 4, 2);
+        // Joints
+        g.fill(255, 255, 255, 180);
+        g.rect(x, y - len/4, 14, 3);
+        g.rect(x, y + len/4, 14, 3);
     };
+    
+    const S = 1.8;
 
     if (value === 1) {
-        g.push(); g.translate(cx, cy + 10);
-        // Tail feathers
+        // Bird
+        g.push(); g.translate(cx, cy + 20);
         g.noStroke();
-        g.fill(this.colors.RED);
-        g.triangle(0, 20, -20, 50, 20, 50);
+        // Body
         g.fill(this.colors.GREEN);
         g.beginShape();
-        g.vertex(0, -30);
-        g.bezierVertex(30, -20, 30, 30, 0, 30);
-        g.bezierVertex(-30, 30, -30, -20, 0, -30);
+        g.vertex(0, -40);
+        g.bezierVertex(50, -30, 50, 50, 0, 50);
+        g.bezierVertex(-50, 50, -50, -30, 0, -40);
         g.endShape();
-        g.fill('#fbbf24'); g.circle(0, -25, 8); // Eye/Beak
+        // Wing details
+        g.fill(this.colors.RED);
+        g.triangle(0, 0, -25, 30, 25, 30);
+        // Eye
+        g.fill('#fbbf24'); g.circle(0, -35, 12); 
+        g.fill('#000'); g.circle(0, -35, 4);
         g.pop();
     } else if (value === 2) {
-        drawStick(cx, cy - 30, 45, this.colors.BLUE);
-        drawStick(cx, cy + 30, 45, this.colors.GREEN);
+        drawStick(cx, cy - 50, 70, this.colors.BLUE);
+        drawStick(cx, cy + 50, 70, this.colors.GREEN);
     } else if (value === 3) {
-        drawStick(cx, cy + 35, 45, this.colors.RED); 
-        drawStick(cx - 24, cy - 15, 45, this.colors.GREEN);
-        drawStick(cx + 24, cy - 15, 45, this.colors.BLUE);
-    } else if (value === 4) {
-        drawStick(cx - 24, cy - 30, 45, this.colors.BLUE);
-        drawStick(cx + 24, cy - 30, 45, this.colors.GREEN);
-        drawStick(cx - 24, cy + 30, 45, this.colors.GREEN);
-        drawStick(cx + 24, cy + 30, 45, this.colors.BLUE);
+        drawStick(cx, cy + 60, 70, this.colors.RED); 
+        drawStick(cx - 40, cy - 20, 70, this.colors.GREEN);
+        drawStick(cx + 40, cy - 20, 70, this.colors.BLUE);
     } else if (value === 5) {
-        drawStick(cx - 28, cy - 35, 40, this.colors.GREEN);
-        drawStick(cx + 28, cy - 35, 40, this.colors.BLUE);
-        drawStick(cx - 28, cy + 35, 40, this.colors.BLUE);
-        drawStick(cx + 28, cy + 35, 40, this.colors.GREEN);
-        drawStick(cx, cy, 35, this.colors.RED);
-    } else if (value === 6) {
-        for(let i=0; i<3; i++) drawStick(cx - 24 + (i*24), cy - 30, 40, this.colors.GREEN);
-        for(let i=0; i<3; i++) drawStick(cx - 24 + (i*24), cy + 30, 40, this.colors.BLUE);
-    } else if (value === 8) {
-         g.noFill(); g.strokeWeight(6);
-         g.stroke(this.colors.GREEN); g.arc(cx, cy-30, 50, 50, Math.PI * 0.2, Math.PI * 0.8);
-         g.stroke(this.colors.BLUE); g.arc(cx, cy+30, 50, 50, Math.PI * 1.2, Math.PI * 1.8);
-         g.noStroke();
-         drawStick(cx - 15, cy - 30, 30, this.colors.GREEN); drawStick(cx + 15, cy - 30, 30, this.colors.GREEN);
-         drawStick(cx - 15, cy + 30, 30, this.colors.BLUE); drawStick(cx + 15, cy + 30, 30, this.colors.BLUE);
+         drawStick(cx - 45, cy - 60, 65, this.colors.GREEN); drawStick(cx + 45, cy - 60, 65, this.colors.BLUE);
+         drawStick(cx, cy, 60, this.colors.RED);
+         drawStick(cx - 45, cy + 60, 65, this.colors.BLUE); drawStick(cx + 45, cy + 60, 65, this.colors.GREEN);
     } else {
-         // Fallback for 7, 9 (Simpler implementation for brevity)
-         g.textAlign(p.CENTER, p.CENTER); g.textSize(40); g.text(value, cx, cy);
+        g.textAlign(p.CENTER, p.CENTER); g.textSize(60); g.fill(this.colors.GREEN); g.text(value, cx, cy);
     }
     return g;
   }
@@ -303,13 +292,16 @@ export class AssetLoader {
     g.textAlign(p.CENTER, p.CENTER);
     g.textStyle(p.BOLD);
     
-    g.textSize(55);
+    g.textSize(90);
     g.fill(this.colors.BLACK);
-    g.text(char, cx, 45);
+    // Add subtle texture to ink
+    g.drawingContext.shadowColor = "rgba(0,0,0,0.5)";
+    g.drawingContext.shadowBlur = 2;
+    g.text(char, cx, 80);
 
-    g.textSize(65);
+    g.textSize(110);
     g.fill(this.colors.RED);
-    g.text("萬", cx, 110);
+    g.text("萬", cx, 210);
 
     return g;
   }
@@ -321,12 +313,17 @@ export class AssetLoader {
 
     g.textAlign(p.CENTER, p.CENTER);
     g.textStyle(p.BOLD);
-    g.textSize(90);
+    g.textSize(160);
     
-    // Add Stroke for elegance
+    // Stroke for elegance
     g.stroke(255, 200);
-    g.strokeWeight(4);
+    g.strokeWeight(6);
     g.fill(color);
+    
+    g.drawingContext.shadowColor = "rgba(0,0,0,0.4)";
+    g.drawingContext.shadowBlur = 4;
+    g.drawingContext.shadowOffsetY = 4;
+
     g.text(char, cx, cy);
     return g;
   }
@@ -339,8 +336,8 @@ export class AssetLoader {
     g.rectMode(p.CENTER);
     g.noFill();
     g.stroke(this.colors.BLUE);
-    g.strokeWeight(8);
-    g.rect(cx, cy, 80, 100, 8);
+    g.strokeWeight(12);
+    g.rect(cx, cy, 140, 190, 12);
     return g;
   }
 
@@ -350,13 +347,13 @@ export class AssetLoader {
       const cy = this.TEX_H / 2;
       
       g.textAlign(p.CENTER, p.CENTER);
-      g.textSize(70);
+      g.textSize(120);
       g.fill('#fb8c00'); 
-      g.text("✿", cx, cy - 20);
+      g.text("✿", cx, cy - 30);
       
-      g.textSize(35);
+      g.textSize(60);
       g.fill(this.colors.BLACK);
-      g.text(val, cx + 40, cy + 50);
+      g.text(val, cx + 60, cy + 100);
       return g;
   }
 }

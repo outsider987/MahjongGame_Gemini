@@ -1,5 +1,6 @@
 
-import { Suit, Tile } from '../types';
+
+import { Tile } from '../types';
 import { AssetLoader } from './AssetLoader';
 import { COLORS } from '../constants';
 
@@ -36,205 +37,266 @@ export class TileRenderService {
      p.pop();
   }
 
-  // --- 1. Standing Tile (The Player's Hand) ---
-  private static drawStandingTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
-      const ctx = p.drawingContext;
-      const depth = 12 * scale;
-      const r = 6 * scale; // Smoother corners
+  // =========================================
+  // MATERIAL HELPERS (SOLID - SRP: Encapsulate Material Logic)
+  // =========================================
 
-      // 1. Shadow (Smoother and deeper)
-      p.noStroke();
-      p.fill(0, 0, 0, 60);
-      // Offset shadow slightly more for depth
-      p.rect(depth * 0.6, depth * 0.6, w, h, r);
-
-      // 2. The Green Back Body (Jade texture)
-      const grdBack = ctx.createLinearGradient(0, 0, w, 0);
-      grdBack.addColorStop(0, '#064e3b');
-      grdBack.addColorStop(0.4, '#10b981'); // Bright ridge
-      grdBack.addColorStop(1, '#064e3b');
-      
-      ctx.fillStyle = grdBack;
-      p.rect(0, 0, w, h, r);
-
-      // 3. The White Face Layer
-      const faceDepth = 3 * scale; 
-      p.translate(0, -faceDepth);
-      
-      // Face Gradient (Subtle curve look - Bone)
-      const grdFace = ctx.createLinearGradient(0, 0, w, h);
-      grdFace.addColorStop(0, '#ffffff');
-      grdFace.addColorStop(1, '#f1f5f9');
-      
-      ctx.fillStyle = grdFace;
-      p.rect(0, 0, w, h, r);
-      
-      // 4. Glossy Highlight (Top Shine)
-      const grdGloss = ctx.createLinearGradient(0, 0, 0, h * 0.4);
-      grdGloss.addColorStop(0, 'rgba(255,255,255,0.8)');
-      grdGloss.addColorStop(1, 'rgba(255,255,255,0.0)');
-      ctx.fillStyle = grdGloss;
-      p.rect(0, 0, w, h * 0.4, r, r, 0, 0);
-
-      // 5. Tile Content
-      if (tile) {
-          this.drawTileFace(p, tile, w, h, 0);
-      }
-  }
-
-  // --- 2. Flat Tile (Table Discards / Melds) ---
-  private static drawFlatTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
-      const ctx = p.drawingContext;
-      const r = 4 * scale;
-
-      // 1. Shadow
-      const thickness = 8 * scale;
-      p.noStroke();
-      p.fill(0, 0, 0, 50);
-      p.rect(4*scale, 4*scale, w, h + thickness, r);
-
-      // 2. Green Base (Side Thickness)
-      const grdThick = ctx.createLinearGradient(0, h, 0, h + thickness);
-      grdThick.addColorStop(0, COLORS.TILE_BACK_MAIN);
-      grdThick.addColorStop(1, COLORS.TILE_BACK_DARK);
-      ctx.fillStyle = grdThick;
-      
-      // Trapezoid for perspective thickness
-      p.beginShape();
-      p.vertex(0, h - r);
-      p.vertex(w, h - r);
-      p.vertex(w, h + thickness - r);
-      p.vertex(0, h + thickness - r);
-      p.endShape(p.CLOSE);
-      // Bottom rect
-      p.rect(0, h - r, w, thickness, 0, 0, r, r);
-
-      // 3. The White Face
-      const grdFace = ctx.createLinearGradient(0, 0, 0, h);
-      grdFace.addColorStop(0, '#ffffff');
-      grdFace.addColorStop(1, '#e2e8f0');
-      ctx.fillStyle = grdFace;
-      p.rect(0, 0, w, h, r);
-
-      // 5. Content
-      if (tile) {
-          this.drawTileFace(p, tile, w, h, 0);
-      }
-      
-      // 6. Surface Shine
-      p.noStroke();
-      p.fill(255, 255, 255, 40);
-      p.ellipse(w * 0.8, h * 0.2, w * 0.6, h * 0.3);
-  }
-
-  // --- 3. Back Standing (Opponent Top) ---
-  private static drawBackStandingTile(p: any, w: number, h: number, scale: number) {
-      const ctx = p.drawingContext;
-      const r = 4 * scale;
-      const depth = 4 * scale;
-
-      // Shadow
-      p.fill(0, 0, 0, 60);
-      p.rect(depth, depth, w, h, r);
-
-      // Main Green Back
-      const grd = ctx.createLinearGradient(0, 0, w, 0);
-      grd.addColorStop(0, '#065f46');
-      grd.addColorStop(0.5, '#10b981'); // Highlight in middle
-      grd.addColorStop(1, '#065f46');
+  private static drawJadeMaterial(p: any, w: number, h: number, r: number, ctx: any) {
+      // Deep, rich green with subsurface scattering fake
+      const grd = ctx.createLinearGradient(0, 0, w, h);
+      grd.addColorStop(0, COLORS.TILE_JADE_DEEP);
+      grd.addColorStop(0.4, COLORS.TILE_JADE_MAIN);
+      grd.addColorStop(1, COLORS.TILE_JADE_LIGHT);
       ctx.fillStyle = grd;
+      p.noStroke();
       p.rect(0, 0, w, h, r);
-      
-      // Top Highlight (Curved top of standing tile)
-      p.fill(255, 255, 255, 150);
-      p.rect(0, 0, w, 3 * scale, r, r, 0, 0);
+
+      // Subtle internal glow
+      const glow = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w);
+      glow.addColorStop(0, 'rgba(16, 185, 129, 0.2)');
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      p.rect(0, 0, w, h, r);
   }
 
-  // --- 4. Side Standing (Opponent Left/Right) ---
-  private static drawSideStandingTile(p: any, stepW: number, lenH: number, scale: number, isLeft: boolean) {
-      const ctx = p.drawingContext;
-      const dw = lenH; 
-      const dh = stepW; 
-      
-      // 1. Shadow
+  private static drawBoneMaterial(p: any, w: number, h: number, r: number, ctx: any) {
+      // Base Cream Color
+      const grd = ctx.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, COLORS.TILE_BONE_SHADOW);
+      grd.addColorStop(0.1, COLORS.TILE_BONE_WARM);
+      grd.addColorStop(0.9, COLORS.TILE_BONE_WARM);
+      grd.addColorStop(1, COLORS.TILE_BONE_SHADOW);
+      ctx.fillStyle = grd;
       p.noStroke();
-      p.fill(0, 0, 0, 60);
-      p.rect(4*scale, 4*scale, dw, dh, 4*scale);
+      p.rect(0, 0, w, h, r);
 
-      // 2. Material Split
-      const boneRatio = 0.35;
-      const boneSize = dh * boneRatio;
-      const bambooSize = dh - boneSize;
-      
-      // A. Bone Section
-      const grdBone = ctx.createLinearGradient(0, 0, 0, boneSize);
-      grdBone.addColorStop(0, '#ffffff');
-      grdBone.addColorStop(1, '#cbd5e1');
-      ctx.fillStyle = grdBone;
-      p.rect(0, 0, dw, boneSize);
-      
-      // B. Bamboo Section
-      const grdBamboo = ctx.createLinearGradient(0, boneSize, 0, dh);
-      grdBamboo.addColorStop(0, '#10b981');
-      grdBamboo.addColorStop(1, '#064e3b');
-      ctx.fillStyle = grdBamboo;
-      p.rect(0, boneSize, dw, bambooSize);
+      // Apply procedural noise texture
+      const tex = AssetLoader.getBoneTexture();
+      if (tex) {
+         p.push();
+         p.blendMode(p.MULTIPLY);
+         p.image(tex, 0, 0, w, h);
+         p.pop();
+      }
+  }
 
-      // C. Dovetail Joint
-      p.stroke('#064e3b');
-      p.strokeWeight(1 * scale);
+  private static drawEdgeHighlight(p: any, w: number, h: number, r: number, ctx: any) {
+      // Top Specular Highlight
+      const grdHigh = ctx.createLinearGradient(0, 0, 0, h * 0.2);
+      grdHigh.addColorStop(0, COLORS.HIGHLIGHT_SPECULAR);
+      grdHigh.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grdHigh;
+      p.rect(0, 0, w, h * 0.2, r, r, 0, 0);
+
+      // Corner Shine
       p.noFill();
-      p.beginShape();
-      const zigSize = 6 * scale;
-      for(let i = 0; i <= dw; i += zigSize) {
-          p.vertex(i, boneSize);
-          p.vertex(i + zigSize/2, boneSize + (1.5 * scale));
-      }
-      p.endShape();
-      p.noStroke();
-
-      // --- 3. Top Cap ---
-      const capSize = 6 * scale; 
-      let capX = isLeft ? dw - capSize : 0;
-      
-      const grdCap = ctx.createLinearGradient(capX, 0, capX+capSize, 0);
-      grdCap.addColorStop(0, '#f8fafc');
-      grdCap.addColorStop(1, '#e2e8f0');
-      ctx.fillStyle = grdCap;
-      p.rect(capX, 0, capSize, dh, 2*scale);
-      
-      // Shiny highlight on green cap part
-      p.fill(255, 255, 255, 120);
-      p.rect(capX, boneSize, capSize, bambooSize, 0, 2*scale, 2*scale, 0);
+      p.stroke(255, 255, 255, 80);
+      p.strokeWeight(1);
+      p.rect(1, 1, w-2, h-2, r);
   }
-  
-  // --- Content Drawing (Face) ---
-  private static drawTileFace(p: any, tile: Tile, w: number, h: number, yOffset: number) {
-      p.push();
-      p.translate(w/2, h/2 + yOffset);
-      
+
+  private static drawTileContent(p: any, tile: Tile, w: number, h: number, scale: number) {
       const img = AssetLoader.getTileImage(tile);
+      if (!img) return;
+
+      const pX = w * 0.1;
+      const pY = h * 0.1;
+      const dW = w - pX*2;
+      const dH = h - pY*2;
       
-      if (img && img.width > 1) {
-          const padding = w * 0.15;
-          // Engraving Effect (Inner Shadow)
-          p.tint(0, 0, 0, 60); 
-          p.imageMode(p.CENTER);
-          // Shift slightly down-right to create "engraved" look
-          p.image(img, 1, 1, w - padding, h - padding);
-          
-          p.noTint();
-          p.image(img, 0, 0, w - padding, h - padding);
-      } else {
-          this.drawFallbackText(p, tile, w, h);
-      }
+      // Engraving / Deboss Effect
+      // 1. Inner Shadow (Offset dark)
+      p.push();
+      p.translate(w/2, h/2);
+      p.imageMode(p.CENTER);
+      
+      p.tint(0, 0, 0, 100);
+      p.image(img, 2*scale, 2*scale, dW, dH);
+      p.noTint();
+      
+      // 2. Main Ink
+      p.image(img, 0, 0, dW, dH);
+      
+      // 3. Ink Shine (Subtle overlay)
+      p.blendMode(p.OVERLAY);
+      p.tint(255, 255, 255, 50);
+      p.image(img, 0, 0, dW, dH);
+      
       p.pop();
   }
 
-  private static drawFallbackText(p: any, tile: Tile, w: number, h: number) {
-      p.textAlign(p.CENTER, p.CENTER);
-      p.textSize(w * 0.6);
+  // =========================================
+  // RENDER STATES
+  // =========================================
+
+  // --- 1. Standing Tile (Player Hand) ---
+  // High detail, Front View
+  private static drawStandingTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
+      const ctx = p.drawingContext;
+      const r = 5 * scale; 
+      
+      // 1. Drop Shadow
+      ctx.shadowColor = COLORS.SHADOW_DROP;
+      ctx.shadowBlur = 15 * scale;
+      ctx.shadowOffsetY = 10 * scale;
       p.fill(0);
-      p.text(tile.value, 0, 0);
+      p.rect(w*0.1, h*0.8, w*0.8, h*0.1, r); // Fake rect for shadow source
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // 2. Backing (Visible slightly at edges/bottom due to curve)
+      p.fill(COLORS.TILE_JADE_DEEP);
+      p.rect(0, 0, w, h, r);
+
+      // 3. Bone Face
+      // Slight margin for backing visibility
+      const m = 0; 
+      p.push();
+      p.translate(m, m);
+      this.drawBoneMaterial(p, w - m*2, h - m*2, r, ctx);
+      
+      // 4. Content
+      if (tile) {
+          this.drawTileContent(p, tile, w, h, scale);
+      }
+
+      // 5. Highlights
+      this.drawEdgeHighlight(p, w, h, r, ctx);
+      p.pop();
+  }
+
+  // --- 2. Flat Tile (Discards) ---
+  // Perspective View: Shows Back thickness + Face
+  private static drawFlatTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
+      const ctx = p.drawingContext;
+      const r = 3 * scale;
+      const depth = 12 * scale; // Thickness of the tile on the table
+
+      // 1. Contact Shadow
+      p.noStroke();
+      p.fill(COLORS.SHADOW_AMBIENT);
+      p.beginShape();
+      p.vertex(0, h);
+      p.vertex(w, h);
+      p.vertex(w + depth*0.5, h + depth);
+      p.vertex(-depth*0.5, h + depth);
+      p.endShape(p.CLOSE);
+
+      // 2. Jade Backing (The Side/Bottom visible)
+      const grdSide = ctx.createLinearGradient(0, h, 0, h+depth);
+      grdSide.addColorStop(0, COLORS.TILE_JADE_MAIN);
+      grdSide.addColorStop(1, COLORS.TILE_JADE_DEEP);
+      ctx.fillStyle = grdSide;
+      
+      p.beginShape();
+      p.vertex(0, h - r); // Start high to tuck under face
+      p.vertex(w, h - r);
+      p.vertex(w, h + depth - r);
+      p.vertex(0, h + depth - r);
+      p.endShape(p.CLOSE);
+      p.rect(0, h+depth-r*2, w, r*2, 0, 0, r, r); // Rounded bottom caps
+
+      // 3. Bone Face
+      this.drawBoneMaterial(p, w, h, r, ctx);
+
+      // 4. Content
+      if (tile) {
+          this.drawTileContent(p, tile, w, h, scale);
+      }
+
+      // 5. Gloss Overlay (Reflection of ceiling light)
+      ctx.save();
+      p.clip(() => p.rect(0, 0, w, h, r));
+      const grdGloss = ctx.createLinearGradient(0, 0, w, h);
+      grdGloss.addColorStop(0.4, 'rgba(255,255,255,0)');
+      grdGloss.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+      grdGloss.addColorStop(0.6, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grdGloss;
+      p.rect(0, 0, w, h);
+      ctx.restore();
+  }
+
+  // --- 3. Back Standing (Opponent Top) ---
+  // Shows Jade Back
+  private static drawBackStandingTile(p: any, w: number, h: number, scale: number) {
+      const ctx = p.drawingContext;
+      const r = 4 * scale;
+
+      // Shadow
+      ctx.shadowColor = COLORS.SHADOW_AMBIENT;
+      ctx.shadowBlur = 10 * scale;
+      ctx.shadowOffsetY = 5 * scale;
+      
+      this.drawJadeMaterial(p, w, h, r, ctx);
+      
+      ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+      // Highlight top edge
+      p.fill(255, 255, 255, 50);
+      p.rect(0, 0, w, 2*scale, r, r, 0, 0);
+  }
+
+  // --- 4. Side Standing (Opponents L/R) ---
+  // Shows split material: Bone Front + Jade Back with Dovetail Joint
+  private static drawSideStandingTile(p: any, stepW: number, lenH: number, scale: number, isLeft: boolean) {
+      const ctx = p.drawingContext;
+      const r = 3 * scale;
+      
+      const w = lenH; // Visual width in this rotation
+      const h = stepW; // Visual height/thickness in this rotation
+
+      // Shadow
+      p.fill(COLORS.SHADOW_AMBIENT);
+      p.rect(4*scale, 4*scale, w, h, r);
+
+      // Split Ratios
+      const boneH = h * 0.35;
+      const jadeH = h * 0.65;
+
+      // A. Bone Section
+      const grdBone = ctx.createLinearGradient(0, 0, w, 0);
+      grdBone.addColorStop(0, COLORS.TILE_BONE_SHADOW);
+      grdBone.addColorStop(0.5, COLORS.TILE_BONE_WARM);
+      grdBone.addColorStop(1, COLORS.TILE_BONE_SHADOW);
+      ctx.fillStyle = grdBone;
+      p.noStroke();
+      p.rect(0, 0, w, boneH, r, r, 0, 0);
+
+      // B. Jade Section
+      p.push();
+      p.translate(0, boneH);
+      this.drawJadeMaterial(p, w, jadeH, 0, ctx);
+      // Round bottom corners of jade
+      p.rect(0, jadeH - r, w, r, 0, 0, r, r);
+      p.pop();
+
+      // C. Dovetail Joint (Zig Zag)
+      p.stroke(COLORS.TILE_JADE_DEEP);
+      p.strokeWeight(0.5 * scale);
+      p.noFill();
+      p.beginShape();
+      const zig = 5 * scale;
+      for(let x = 0; x <= w; x += zig) {
+          p.vertex(x, boneH);
+          p.vertex(x + zig/2, boneH + 2*scale);
+          p.vertex(x + zig, boneH);
+      }
+      p.endShape();
+      
+      // D. Top Cap (Perspective)
+      const capW = 6 * scale;
+      const capX = isLeft ? w - capW : 0;
+      
+      // Cap Bone
+      p.fill('#e2e8f0');
+      p.noStroke();
+      p.rect(capX, 0, capW, boneH);
+      // Cap Jade
+      p.fill(COLORS.TILE_JADE_DEEP);
+      p.rect(capX, boneH, capW, jadeH, 0, 0, r, r);
+      
+      // Cap Highlight
+      p.fill(255, 255, 255, 100);
+      p.rect(capX, 0, 1*scale, h);
   }
 }
