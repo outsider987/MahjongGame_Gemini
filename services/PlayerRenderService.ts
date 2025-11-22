@@ -163,41 +163,74 @@ export class PlayerRenderService {
           
           p.push();
           
-          let drawX = startX + c*w;
-          let drawY = r*(h + overlapY);
+          const destX = startX + c*w;
+          const destY = r*(h + overlapY);
           
-          // If this specific tile is the Riichi tile, we rotate it
-          if (isRichiiTile) {
-             p.translate(drawX + w/2, drawY + h/2);
-             p.rotate(p.HALF_PI);
-             p.translate(-w/2, -h/2); // Recenter
-             p.translate((h-w)/2, 0);
-             drawX = 0;
-             drawY = 0;
-          } else {
-             p.translate(drawX, drawY);
-             drawX = 0; 
-             drawY = 0;
-          }
+          // 1. Move to Destination
+          p.translate(destX, destY);
           
-          // DISCARD ANIMATION (Toss & Settle)
+          // 2. Animation Calculation (Before Riichi rotation so trajectory is relative to table)
+          let animScale = 1;
           const isLastDiscard = (i === tiles.length - 1);
+          
           if (isLastDiscard && isDiscardingPlayer) {
-               const dur = 350; // ms
+               const dur = 400; 
                const elapsed = Date.now() - animation.lastDiscardTime;
                
                if (elapsed < dur) {
                    const t = elapsed / dur;
-                   const scaleFactor = 1.5 - (0.5 * t);
-                   const rot = 0.2 * (1 - t);
-                   const dropY = -20 * globalScale * (1 - t);
+                   // Cubic Ease Out
+                   const ease = 1 - Math.pow(1 - t, 3);
+
+                   // Origin: Roughly where the player's hand is in this local space
+                   // Local Y+ is towards player/hand. Hand is further down.
+                   const originX = 0; 
+                   const originY = 220 * globalScale; 
+
+                   // Vector from Dest to Origin (Backward vector)
+                   const vX = originX - destX;
+                   const vY = originY - destY;
                    
-                   p.translate(0, dropY);
-                   p.scale(scaleFactor);
+                   // Interpolate: Current Position = Dest + (Vector * (1-ease))
+                   const currX = vX * (1 - ease);
+                   const currY = vY * (1 - ease);
+                   
+                   p.translate(currX, currY);
+                   
+                   // Arc (Z-axis simulated by Y offset + Scale)
+                   const arcH = 150 * globalScale;
+                   const z = Math.sin(t * Math.PI) * arcH;
+                   p.translate(0, -z);
+                   
+                   // Scale
+                   animScale = 1.4 - (0.4 * ease);
+                   
+                   // Spin
+                   const spins = 2;
+                   const rot = (1 - ease) * Math.PI * 2 * spins;
                    p.rotate(rot);
+
+               } else if (elapsed < dur + 150) {
+                   // Bounce Effect upon landing
+                   const landT = (elapsed - dur) / 150;
+                   const bounceH = 10 * globalScale * Math.sin(landT * Math.PI);
+                   p.translate(0, -bounceH);
                }
           }
 
+          // 3. Apply Scale
+          p.scale(animScale);
+          
+          // 4. Riichi Rotation (Local to tile)
+          if (isRichiiTile) {
+             // Pivot center
+             p.translate(w/2, h/2);
+             p.rotate(p.HALF_PI);
+             p.translate(-w/2, -h/2);
+             // Center in slot (since w!=h)
+             p.translate((h-w)/2, 0);
+          }
+          
           // @ts-ignore
           TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
           p.pop();
