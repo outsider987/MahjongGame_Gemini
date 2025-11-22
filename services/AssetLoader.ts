@@ -3,6 +3,7 @@ import { Suit, Tile } from '../types';
 
 export class AssetLoader {
   private static images: Record<string, any> = {};
+  private static woodTexture: any = null;
   
   // Texture resolution (Higher = sharper)
   private static TEX_W = 128; // Increased for quality
@@ -59,6 +60,9 @@ export class AssetLoader {
     for (let i = 1; i <= 8; i++) {
         this.images[this.getAssetKey(Suit.FLOWERS, i)] = this.createFlowerTile(p, i);
     }
+
+    // 7. Backgrounds
+    this.woodTexture = this.createWoodTexture(p);
   }
 
   /**
@@ -69,7 +73,88 @@ export class AssetLoader {
     return this.images[key] || null;
   }
 
+  static getWoodTexture(): any | null {
+      return this.woodTexture;
+  }
+
   // --- Procedural Drawing Helpers ---
+
+  private static createWoodTexture(p: any) {
+    const w = 512;
+    const h = 512;
+    const g = p.createGraphics(w, h);
+    
+    // 1. Base Dark Wood Color
+    g.background('#2a1b0e'); 
+
+    // 2. Wood Grain Texture
+    g.noFill();
+    
+    // Draw Grain Lines
+    for (let i = 0; i < 300; i++) {
+       // Lighter Highlights
+       g.stroke(255, 255, 255, p.random(2, 5));
+       g.strokeWeight(p.random(1, 3));
+       
+       let y = p.random(h);
+       g.beginShape();
+       for(let x=0; x<=w; x+=30) {
+           const n = p.noise(x * 0.01, y * 0.01);
+           g.curveVertex(x, y + Math.sin(x * 0.02) * 10 + n * 20);
+       }
+       g.endShape();
+
+       // Darker Grooves
+       g.stroke(0, 0, 0, p.random(20, 60));
+       g.strokeWeight(p.random(1, 4));
+       y = p.random(h);
+       g.beginShape();
+       for(let x=0; x<=w; x+=30) {
+           const n = p.noise(x * 0.01, y * 0.01);
+           g.curveVertex(x, y + Math.sin(x * 0.02) * 10 + n * 20);
+       }
+       g.endShape();
+    }
+
+    // 3. Subtle Geometric Pattern (Lattice Overlay)
+    g.stroke('#d4af37'); // Gold
+    g.strokeWeight(1);
+    g.noFill();
+    
+    const size = 128;
+    const alpha = 15; // Very faint
+
+    for(let y = 0; y < h; y += size) {
+        for(let x = 0; x < w; x += size) {
+            // Corner flourishes
+            g.stroke(212, 175, 55, alpha);
+            const padding = 10;
+            const len = 20;
+            
+            // Top-Left
+            g.line(x + padding, y + padding, x + padding + len, y + padding);
+            g.line(x + padding, y + padding, x + padding, y + padding + len);
+            
+            // Top-Right
+            g.line(x + size - padding, y + padding, x + size - padding - len, y + padding);
+            g.line(x + size - padding, y + padding, x + size - padding, y + padding + len);
+
+            // Bottom-Left
+            g.line(x + padding, y + size - padding, x + padding + len, y + size - padding);
+            g.line(x + padding, y + size - padding, x + padding, y + size - padding - len);
+
+            // Bottom-Right
+            g.line(x + size - padding, y + size - padding, x + size - padding - len, y + size - padding);
+            g.line(x + size - padding, y + size - padding, x + size - padding, y + size - padding - len);
+            
+            // Center Dot
+            g.stroke(212, 175, 55, alpha * 1.5);
+            g.point(x + size/2, y + size/2);
+        }
+    }
+    
+    return g;
+  }
 
   private static createBase(p: any) {
     const g = p.createGraphics(this.TEX_W, this.TEX_H);

@@ -14,7 +14,8 @@ export class RenderService {
     p: any, 
     gameState: any, 
     globalScale: number, 
-    hoveredTileIndex: number
+    hoveredTileIndex: number,
+    animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; }
   ): RenderMetrics {
     
     const ctx: RenderContext = {
@@ -22,7 +23,8 @@ export class RenderService {
       globalScale,
       width: p.width,
       height: p.height,
-      hoveredTileIndex
+      hoveredTileIndex,
+      animation
     };
 
     // 0. INIT STATE OVERRIDE

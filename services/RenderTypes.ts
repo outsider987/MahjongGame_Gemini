@@ -10,4 +10,9 @@ export type RenderContext = {
   width: number;
   height: number;
   hoveredTileIndex: number;
+  animation: {
+    lastTurnTime: number;
+    lastDiscardTime: number;
+    discardingPlayer: number; // ID or Index of the player who last discarded
+  };
 };

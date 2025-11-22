@@ -23,13 +23,10 @@ export class PlayerRenderService {
      const GAP_NEW_TILE = 16 * s;
      const MELD_GAP = 8 * s;
      
-     // Side tiles Thickness (Width on screen)
-     // Increased to 32 to make the side profile (Bone+Bamboo) more visible and aesthetic
      const SIDE_TILE_THICKNESS = 32 * s; 
      
      const P0_MARGIN_RIGHT = 160 * s;
      const SIDE_MARGIN_BOTTOM = 150 * s; 
-     const SIDE_MARGIN_TOP = 80 * s;
      const BOTTOM_Y = BASE_BOTTOM_OFFSET * s;
 
      const hand = player.hand || [];
@@ -61,7 +58,7 @@ export class PlayerRenderService {
          if (endX > limitX) startX = limitX - totalSize;
          if (startX < 20 * s) startX = 20 * s;
 
-         this.drawHandSequence(ctx, hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE);
+         this.drawHandSequence(ctx, hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
             const meldStartX = startX + handSizePx + GAP_HAND_MELD;
@@ -85,8 +82,7 @@ export class PlayerRenderService {
 
          const dummyHand = Array(visualHandCount).fill(null);
          // Draw Tiles
-         // Note: we pass TILE_H as the length (h), and SIDE_TILE_THICKNESS as the step/width (w)
-         this.drawHandSequence(ctx, dummyHand, startY, 0, SIDE_TILE_THICKNESS, TILE_H, 1, 'SIDE_STANDING_R', hasNew, 1, GAP_NEW_TILE);
+         this.drawHandSequence(ctx, dummyHand, startY, 0, SIDE_TILE_THICKNESS, TILE_H, 1, 'SIDE_STANDING_R', hasNew, 1, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
              const meldStartY = startY + handSizePx + GAP_HAND_MELD;
@@ -100,7 +96,7 @@ export class PlayerRenderService {
          const startX = (width - totalSize) / 2;
          
          const dummyHand = Array(visualHandCount).fill(null);
-         this.drawHandSequence(ctx, dummyHand, startX, 0, TILE_W, TILE_H, 1, 'BACK_STANDING', hasNew, 2, GAP_NEW_TILE);
+         this.drawHandSequence(ctx, dummyHand, startX, 0, TILE_W, TILE_H, 1, 'BACK_STANDING', hasNew, 2, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
              const meldStartX = startX + handSizePx + GAP_HAND_MELD;
@@ -109,8 +105,6 @@ export class PlayerRenderService {
 
      } else if (index === 3) {
          // Left Player
-         // We need correct Z-Order: Bottom tiles should cover Top tiles (Closest covers Furthest).
-         
          p.translate(100 * s, height); 
          p.rotate(-p.HALF_PI); // Rotate -90. X is Up. Y is Right.
          
@@ -121,12 +115,11 @@ export class PlayerRenderService {
 
          const dummyHand = Array(visualHandCount).fill(null);
          
-         // Calc End Position (High X)
          const fullLen = (visualHandCount * SIDE_TILE_THICKNESS) + (hasNew ? GAP_NEW_TILE : 0);
          const endPos = startY + fullLen;
          
-         // Custom Reverse Loop for Left Player Hand (Draws Top -> Bottom relative to Screen)
-         this.drawLeftHandReverse(ctx, dummyHand, endPos, 0, SIDE_TILE_THICKNESS, TILE_H, hasNew, GAP_NEW_TILE);
+         // Custom Reverse Loop for Left Player Hand
+         this.drawLeftHandReverse(ctx, dummyHand, endPos, 0, SIDE_TILE_THICKNESS, TILE_H, hasNew, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
              const meldStartY = startY + fullLen + GAP_HAND_MELD;
@@ -142,7 +135,7 @@ export class PlayerRenderService {
       const tiles = player.discards || [];
       if (tiles.length === 0) return;
       
-      const { p, width, height, globalScale } = ctx;
+      const { p, width, height, globalScale, animation } = ctx;
       p.push();
       
       const w = 32 * globalScale; 
@@ -159,11 +152,40 @@ export class PlayerRenderService {
       
       const startX = -(cols * w) / 2;
       
+      const isDiscardingPlayer = (index === animation.discardingPlayer);
+
       tiles.forEach((tile: Tile, i: number) => {
           const r = Math.floor(i / cols);
           const c = i % cols;
           const overlapY = -6 * globalScale; 
-          TileRenderService.drawTile(p, startX + c*w, r*(h + overlapY), tile, w, h, 'FLAT', globalScale);
+          
+          p.push();
+          p.translate(startX + c*w, r*(h + overlapY));
+          
+          // DISCARD ANIMATION (Toss & Settle)
+          const isLastDiscard = (i === tiles.length - 1);
+          if (isLastDiscard && isDiscardingPlayer) {
+               const dur = 350; // ms
+               const elapsed = Date.now() - animation.lastDiscardTime;
+               
+               if (elapsed < dur) {
+                   const t = elapsed / dur;
+                   // Scale: Large to Normal (1.5 -> 1.0)
+                   const scaleFactor = 1.5 - (0.5 * t);
+                   // Rotate: Spin slightly into place (0.2rad -> 0)
+                   const rot = 0.2 * (1 - t);
+                   // Offset: Drop from height (-20 -> 0)
+                   const dropY = -20 * globalScale * (1 - t);
+                   
+                   p.translate(0, dropY);
+                   p.scale(scaleFactor);
+                   p.rotate(rot);
+               }
+          }
+
+          // @ts-ignore
+          TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
+          p.pop();
       });
       p.pop();
   }
@@ -171,9 +193,9 @@ export class PlayerRenderService {
   private static drawHandSequence(
       ctx: RenderContext, hand: Tile[], startX: number, y: number, w: number, h: number, 
       dir: 1 | -1, type: string, 
-      hasNewTile: boolean, playerIdx: number, newTileGap: number
+      hasNewTile: boolean, playerIdx: number, newTileGap: number, isActive: boolean
   ) {
-      const { p, globalScale, hoveredTileIndex } = ctx;
+      const { p, globalScale, hoveredTileIndex, animation } = ctx;
       const count = hand.length;
       const gapIndex = hasNewTile ? count - 1 : -1;
       
@@ -183,39 +205,86 @@ export class PlayerRenderService {
           const drawX = dir === 1 ? cx : cx - w;
           let renderY = y;
           
+          p.push();
+          p.translate(drawX, renderY);
+
+          // DRAW ANIMATION (Flip Up)
+          // Only animate the last tile if it is "new" and the player is active
+          const isLastTile = (i === count - 1);
+          if (hasNewTile && isLastTile && isActive) {
+              const dur = 400; // ms
+              const elapsed = Date.now() - animation.lastTurnTime;
+              
+              if (elapsed < dur) {
+                  const t = elapsed / dur; 
+                  // Ease Out Quad
+                  const ease = 1 - (1 - t) * (1 - t);
+                  
+                  // Translate: Rise up from bottom
+                  const dropY = 30 * globalScale * (1 - ease);
+                  
+                  // Scale Y: Flip Open (0.1 -> 1.0)
+                  const scaleY = 0.1 + (0.9 * ease);
+                  
+                  p.translate(0, dropY);
+                  // Simulate 3D Flip around X axis by scaling Y
+                  p.scale(1, scaleY);
+              }
+          }
+
           if (playerIdx === 0 && i === hoveredTileIndex) {
-              renderY -= (15 * globalScale);
+              p.translate(0, -15 * globalScale);
           }
           
           // @ts-ignore
-          TileRenderService.drawTile(p, drawX, renderY, hand[i], w, h, type, globalScale);
+          TileRenderService.drawTile(p, 0, 0, hand[i], w, h, type, globalScale);
+          p.pop();
+
           cx += (w * dir);
       }
   }
 
-  // Special Reverse Drawer for Left Player to fix Z-Order overlap
   private static drawLeftHandReverse(
     ctx: RenderContext, hand: Tile[], endX: number, y: number, w: number, h: number,
-    hasNewTile: boolean, newTileGap: number
+    hasNewTile: boolean, newTileGap: number, isActive: boolean
   ) {
-      const { p, globalScale } = ctx;
+      const { p, globalScale, animation } = ctx;
       const count = hand.length;
       
-      // Start from the Top (High X) and move Down (Low X)
-      let cx = endX; // Top-most coordinate
+      let cx = endX; 
       
       for (let i = count - 1; i >= 0; i--) {
-          // If this is the new tile (last index), it has a gap before the rest
           if (hasNewTile && i === count - 1) {
-              // cx is already at end.
+              // no gap for first (last in array)
           } else if (hasNewTile && i === count - 2) {
               cx -= newTileGap;
           }
 
-          cx -= w; // Move down for current tile space
+          cx -= w; 
           
+          p.push();
+          p.translate(cx, y);
+
+          // DRAW ANIMATION (Flip Up)
+          const isLastTile = (i === count - 1);
+          if (hasNewTile && isLastTile && isActive) {
+              const dur = 400; 
+              const elapsed = Date.now() - animation.lastTurnTime;
+              if (elapsed < dur) {
+                  const t = elapsed / dur; 
+                  const ease = 1 - (1 - t) * (1 - t);
+                  // For Left player, Y is horizontal in screen space due to rotation in parent
+                  // But here we are in local space where Y is perpendicular to tile line.
+                  // "Drop" means moving away from the center? Or simple scale.
+                  
+                  const scaleY = 0.1 + (0.9 * ease);
+                  p.scale(1, scaleY);
+              }
+          }
+
           // @ts-ignore
-          TileRenderService.drawTile(p, cx, y, hand[i], w, h, 'SIDE_STANDING_L', globalScale);
+          TileRenderService.drawTile(p, 0, 0, hand[i], w, h, 'SIDE_STANDING_L', globalScale);
+          p.pop();
       }
   }
 

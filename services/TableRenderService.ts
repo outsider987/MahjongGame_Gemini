@@ -1,34 +1,80 @@
 
 import { COLORS } from '../constants';
 import { RenderContext } from './RenderTypes';
+import { AssetLoader } from './AssetLoader';
 
 export class TableRenderService {
 
   static drawTable({ p, width, height }: RenderContext) {
     const ctx = p.drawingContext;
-    const gradient = ctx.createRadialGradient(width/2, height/2, 200, width/2, height/2, height);
-    gradient.addColorStop(0, '#0f4c3a'); 
-    gradient.addColorStop(1, '#022c22'); 
+    const woodImg = AssetLoader.getWoodTexture();
+
+    // 1. Draw Wood Background (Full Screen)
+    if (woodImg) {
+        p.imageMode(p.CORNER);
+        p.image(woodImg, 0, 0, width, height);
+    } else {
+        p.background('#2a1b0e');
+    }
+
+    // 2. Draw Central Felt Mat (The playing area)
+    // Leave a border of "Wood" visible
+    const margin = Math.min(width, height) * 0.03; // 3% margin
+    const matW = width - (margin * 2);
+    const matH = height - (margin * 2);
+
+    p.push();
+    p.translate(margin, margin);
+    
+    // Drop Shadow for the Mat to give depth
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 5;
+
+    // Mat Gradient (Green)
+    const gradient = ctx.createRadialGradient(matW/2, matH/2, 100, matW/2, matH/2, matH);
+    gradient.addColorStop(0, '#0f4c3a'); // Rich Emerald
+    gradient.addColorStop(1, '#022c22'); // Darker Edge
     ctx.fillStyle = gradient;
+    
     p.noStroke();
-    p.rect(0, 0, width, height);
+    p.rect(0, 0, matW, matH, 20); // Rounded corners
+    
+    // Reset Shadow
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // Vignette inside the mat
+    const gradVignette = ctx.createRadialGradient(matW/2, matH/2, matH * 0.4, matW/2, matH/2, matH * 0.8);
+    gradVignette.addColorStop(0, 'rgba(0,0,0,0)');
+    gradVignette.addColorStop(1, 'rgba(0,0,0,0.5)');
+    ctx.fillStyle = gradVignette;
+    p.rect(0, 0, matW, matH, 20);
+
+    p.pop();
   }
 
   static drawTableInfo({ p, globalScale }: RenderContext, deckCount: number) {
     p.push();
     p.scale(globalScale);
-    p.translate(20, 60);
-    p.fill(0, 0, 0, 80);
+    p.translate(30, 70); // Slightly adjusted position due to margin
+    
+    // Darker background for info box to contrast with wood/felt
+    p.fill(0, 0, 0, 180);
     p.stroke(COLORS.UI_BORDER_GOLD);
+    p.strokeWeight(1);
     p.rect(0, 0, 180, 80, 12);
+    
     p.noStroke();
     p.fill('#fbbf24');
     p.textSize(14);
     p.text("CURRENT ROUND", 16, 12, 150);
+    
     p.fill(255);
     p.textSize(22);
     p.textStyle(p.BOLD);
     p.text("南風北局 (2/4)", 16, 45);
+    
     p.textSize(28);
     p.fill('#34d399'); 
     p.text(deckCount, 130, 45);
@@ -51,12 +97,20 @@ export class TableRenderService {
     // Use the backend timer value directly (seconds)
     const timeLeft = game.actionTimer !== undefined ? game.actionTimer : 0;
     const isInterrupt = game.state === 'INTERRUPT';
+    const isCheckingFlowers = game.state === 'STATE_CHECK_FLOWERS' || game.state === 'CHECK_FLOWERS';
     
     p.noStroke();
     p.textAlign(p.CENTER, p.CENTER);
-    p.textSize(32); 
-    p.fill(isInterrupt ? '#fbbf24' : COLORS.CYAN_LED);
-    p.text(isInterrupt ? "!" : timeLeft, 0, 0);
+    
+    if (isCheckingFlowers) {
+        p.textSize(24);
+        p.fill('#fbbf24');
+        p.text("補花", 0, 0);
+    } else {
+        p.textSize(32); 
+        p.fill(isInterrupt ? '#fbbf24' : COLORS.CYAN_LED);
+        p.text(isInterrupt ? "!" : timeLeft, 0, 0);
+    }
 
     const turn = game.turn;
     const offset = boxSize/2 - 15;

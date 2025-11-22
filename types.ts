@@ -83,8 +83,10 @@ export interface RoomSettings {
 
 export interface VisualEffect {
   id: number;
-  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES';
+  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP';
+  variant?: string; // e.g., 'HU', 'GOLD', 'BLUE', 'FIRE'
   text?: string;
+  tile?: Tile; // For TILE_POPUP
   x?: number;
   y?: number;
   life: number;

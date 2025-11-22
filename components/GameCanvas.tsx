@@ -4,8 +4,7 @@ import { AppView, GameStateDTO, Player, Tile, ActionType, VisualEffect } from '.
 import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
 import { socketService } from '../services/SocketService';
-import { Mic, MessageCircle, Battery, Signal, ChevronLeft, Menu, Volume2, Wifi, RefreshCw } from 'lucide-react';
-import { Button } from './ui/Button';
+import { Settings, X, LogOut, Volume2, VolumeX, RefreshCw, Wifi } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -39,7 +38,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   
   // Game State is now fully controlled by backend events
   const gameRef = useRef<GameStateDTO>(INITIAL_MOCK_STATE);
-  const effectsRef = useRef<VisualEffect[]>([]); // Effects are transient, handled locally for animation
+  const prevGameRef = useRef<GameStateDTO>(INITIAL_MOCK_STATE);
+  const effectsRef = useRef<VisualEffect[]>([]); 
+  
+  // Animation State Refs
+  const animState = useRef({
+      lastTurnTime: 0,
+      lastDiscardTime: 0,
+      discardingPlayer: -1
+  });
   
   // Interaction State
   const hitTestMetrics = useRef<RenderMetrics>({ p0HandStartX: 0, p0TileW: 0 });
@@ -50,6 +57,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const [availableActions, setAvailableActions] = useState<ActionType[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // --- Socket Connection ---
   useEffect(() => {
@@ -63,15 +71,34 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     socket.on("disconnect", () => setIsConnected(false));
 
     socket.on("game:state", (newState: GameStateDTO) => {
-        // Update Ref for p5 loop
+        const prev = prevGameRef.current;
+        
+        // 1. Detect Turn Change (for Draw Animation)
+        if (prev.turn !== newState.turn) {
+            animState.current.lastTurnTime = Date.now();
+        }
+
+        // 2. Detect Discard (for Discard Animation)
+        // We check if the total number of discards increased
+        const prevTotal = prev.players.reduce((sum, p) => sum + p.discards.length, 0);
+        const newTotal = newState.players.reduce((sum, p) => sum + p.discards.length, 0);
+        
+        if (newTotal > prevTotal) {
+            animState.current.lastDiscardTime = Date.now();
+            animState.current.discardingPlayer = newState.lastDiscard?.playerIndex ?? -1;
+        }
+
+        // Update Refs
+        prevGameRef.current = newState;
         gameRef.current = newState;
+        
         // Update React State for UI Overlay
         setAvailableActions(newState.availableActions || []);
         setActivePlayerIndex(newState.turn);
     });
 
     socket.on("game:effect", (effectData: any) => {
-        triggerEffect(effectData.type, effectData.text, effectData.position?.x, effectData.position?.y);
+        triggerEffect(effectData.type, effectData.text, effectData.position?.x, effectData.position?.y, effectData.variant, effectData.tile);
     });
 
     return () => {
@@ -85,28 +112,60 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
 
   // --- Effect System ---
-  const triggerEffect = (type: 'TEXT' | 'LIGHTNING' | 'PARTICLES', text?: string, x?: number, y?: number) => {
+  const triggerEffect = (type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP', text?: string, x?: number, y?: number, variant?: string, tile?: Tile) => {
       effectsRef.current.push({
           id: Date.now() + Math.random(),
           type,
+          variant,
           text,
+          tile,
           x: x || window.innerWidth / 2,
           y: y || window.innerHeight / 2,
-          life: type === 'LIGHTNING' ? 25 : 50,
-          particles: type === 'PARTICLES' ? createParticles(x || window.innerWidth/2, y || window.innerHeight/2) : undefined
+          life: type === 'LIGHTNING' ? 25 : (type === 'SHOCKWAVE' ? 30 : 50),
+          particles: type === 'PARTICLES' ? createParticles(x || window.innerWidth/2, y || window.innerHeight/2, variant) : undefined
       });
   };
 
-  const createParticles = (x: number, y: number) => {
+  const createParticles = (x: number, y: number, variant?: string) => {
       const pArr = [];
-      for(let i=0; i<25; i++) {
+      let count = 25;
+      let colors = ['#fbbf24', '#fcd34d']; // Default Gold
+      let speed = 10;
+      let gravity = 0;
+
+      if (variant === 'HU') {
+          count = 120;
+          colors = ['#ef4444', '#fbbf24', '#ffffff', '#b91c1c']; // Red, Gold, White, Dark Red
+          speed = 25;
+          gravity = 0.5;
+      } else if (variant === 'BLUE') { // PONG
+          count = 40;
+          colors = ['#3b82f6', '#93c5fd', '#ffffff']; // Blue, Light Blue
+          speed = 15;
+      } else if (variant === 'PURPLE') { // KONG
+          count = 50;
+          colors = ['#a855f7', '#d8b4fe', '#ffffff']; // Purple
+          speed = 18;
+      } else if (variant === 'GREEN') { // CHOW
+          count = 30;
+          colors = ['#10b981', '#6ee7b7'];
+          speed = 12;
+      }
+
+      for(let i=0; i<count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const v = Math.random() * speed;
+          const r = Math.random() * speed; 
+          
           pArr.push({
               x, y,
-              vx: (Math.random() - 0.5) * 20,
-              vy: (Math.random() - 0.5) * 20,
-              life: 30 + Math.random() * 20,
-              color: Math.random() > 0.5 ? '#fbbf24' : '#fcd34d',
-              size: 6 + Math.random() * 8
+              vx: Math.cos(angle) * v,
+              vy: Math.sin(angle) * v,
+              life: 40 + Math.random() * 20,
+              maxLife: 60,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              size: 6 + Math.random() * 8,
+              gravity: gravity
           });
       }
       return pArr;
@@ -114,14 +173,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
   // --- Interaction Handlers ---
   const handleDiscard = (tileIndex: number) => {
-      // Optimistic UI update could go here, but for MJ exact state is critical
-      // So we just send signal
       socketService.sendDiscard(tileIndex);
   };
 
   const handlePlayerAction = (action: ActionType) => {
       socketService.sendAction(action);
-      setAvailableActions([]); // Clear immediately to prevent double click
+      setAvailableActions([]); 
   };
 
   // --- P5 Loop ---
@@ -157,7 +214,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           p, 
           renderState, 
           globalScale, 
-          hoveredTileRef.current
+          hoveredTileRef.current,
+          animState.current
         );
 
         // Input Logic
@@ -167,9 +225,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       const updateHitTest = (p: any, scale: number) => {
           hoveredTileRef.current = -1;
           
-          // Only allow interaction if it's my turn and state is DISCARD
-          // (In a real app, verify player ID matches self)
-          const isMyTurn = gameRef.current.turn === 0; // Assuming P0 is always self in view
+          const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
 
           if (!isMyTurn || !canDiscard) return;
@@ -201,10 +257,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           }
 
           if (p.mouseIsPressed && hoveredTileRef.current !== -1) {
-               // Debounce slightly
                if (p.frameCount % 10 === 0) {
                    handleDiscard(hoveredTileRef.current);
-                   hoveredTileRef.current = -1; // Reset
+                   hoveredTileRef.current = -1; 
                }
           }
       };
@@ -222,30 +277,77 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef}>
-      {/* Top Bar */}
-      <div className="absolute top-0 w-full h-12 bg-black/40 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 z-20">
-          <div className="flex items-center gap-4">
-            <Button variant="secondary" className="px-2 py-1 text-xs flex items-center gap-1" onClick={() => setView(AppView.LOBBY)}>
-                 <ChevronLeft size={14}/> 離開
-            </Button>
-            <div className="flex items-center gap-2 text-yellow-500 text-sm font-bold">
-                <span className="bg-yellow-500/20 px-2 py-0.5 rounded">房號 80440</span>
-                <span className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {isConnected ? '連線正常' : '斷線重連中...'}
-                </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-gray-400">
-               <button onClick={() => socketService.restartGame()} title="重啟遊戲">
-                  <RefreshCw size={16} className="hover:text-white" />
-               </button>
-              <Wifi size={16} className={isConnected ? "text-green-500" : "text-red-500"}/>
-              <div className="h-4 w-[1px] bg-gray-600 mx-1"></div>
-              <button onClick={() => setIsMuted(!isMuted)}>
-                 {isMuted ? <Volume2 size={18} className="text-red-500"/> : <Volume2 size={18} />}
-              </button>
-              <Menu size={20} className="cursor-pointer hover:text-white"/>
-          </div>
+      
+      {/* --- NEW Floating Info Capsule (Top Left) --- */}
+      <div className="absolute top-4 left-4 z-50 flex items-center gap-3 animate-fade-in">
+           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg transition-all hover:bg-black/60 cursor-default group select-none">
+               <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${isConnected ? 'bg-green-500 text-green-500' : 'bg-red-500 text-red-500'} animate-pulse`}></span>
+               <span className="text-yellow-500 text-xs font-bold font-mono tracking-wider">ROOM 80440</span>
+               <div className="w-[1px] h-3 bg-white/20 mx-1"></div>
+               <Wifi size={12} className={isConnected ? "text-green-400" : "text-red-400"} />
+           </div>
+      </div>
+
+      {/* --- NEW Collapsible System Menu (Top Right) --- */}
+      <div className="absolute top-4 right-4 z-50">
+           <button 
+               onClick={() => setIsMenuOpen(!isMenuOpen)}
+               className={`p-2.5 rounded-full backdrop-blur-md border transition-all duration-300 shadow-xl hover:scale-105 active:scale-95 ${
+                   isMenuOpen 
+                   ? 'bg-yellow-500 text-red-900 border-yellow-400 rotate-90' 
+                   : 'bg-black/40 text-white border-white/10 hover:bg-black/60 hover:border-yellow-500/50'
+               }`}
+               aria-label="System Menu"
+           >
+               {isMenuOpen ? <X size={20} /> : <Settings size={20} />} 
+           </button>
+
+           {/* Dropdown Panel */}
+           {isMenuOpen && (
+               <div className="absolute right-0 top-14 w-60 bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl border border-yellow-600/30 shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden animate-[slideIn_0.2s_ease-out] origin-top-right">
+                   <div className="p-4 border-b border-white/5">
+                       <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-2">System Settings</p>
+                       <div className="flex items-center justify-between bg-white/5 rounded-lg p-2">
+                           <span className="text-sm text-gray-200 font-medium">Sound Effects</span>
+                           <button 
+                                onClick={() => setIsMuted(!isMuted)} 
+                                className={`p-1.5 rounded-md transition-colors ${isMuted ? 'text-red-400 bg-red-500/10' : 'text-green-400 bg-green-500/10'}`}
+                           >
+                               {isMuted ? <VolumeX size={16}/> : <Volume2 size={16}/>}
+                           </button>
+                       </div>
+                   </div>
+                   
+                   <div className="p-2 space-y-1">
+                       <button 
+                           onClick={() => {
+                               socketService.restartGame();
+                               setIsMenuOpen(false);
+                           }}
+                           className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-all text-left group"
+                       >
+                           <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                                <RefreshCw size={14} />
+                           </div>
+                           <span>重啟牌局 (Debug)</span>
+                       </button>
+                       
+                       <button 
+                           onClick={() => setView(AppView.LOBBY)}
+                           className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-300 hover:bg-red-900/30 hover:text-red-200 transition-all text-left group"
+                       >
+                           <div className="p-1.5 bg-red-500/20 text-red-400 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                <LogOut size={14} />
+                           </div>
+                           <span>離開房間</span>
+                       </button>
+                   </div>
+                   
+                   <div className="bg-black/40 p-2 text-center border-t border-white/5">
+                       <p className="text-[10px] text-gray-600 font-mono">Mahjong Master v1.0.4</p>
+                   </div>
+               </div>
+           )}
       </div>
 
       {/* Players Overlay */}
@@ -306,7 +408,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   );
 };
 
-// (Keeping PlayerCard component same as before, included inline here for completeness if needed, but using existing is fine)
 interface PlayerCardProps {
   player: Player;
   position: 'bottom' | 'right' | 'top' | 'left';
