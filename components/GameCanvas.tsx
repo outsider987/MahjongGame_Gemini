@@ -45,7 +45,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const animState = useRef({
       lastTurnTime: 0,
       lastDiscardTime: 0,
-      discardingPlayer: -1
+      discardingPlayer: -1,
+      lastStateChangeTime: 0
   });
   
   // Interaction State
@@ -93,6 +94,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
             if (newState.lastDiscard?.playerIndex === 0) {
                 selectedTileRef.current = -1;
             }
+        }
+
+        // 3. Detect State/Step Change
+        const stateChanged = prev.state !== newState.state;
+        const stepChanged = prev.initData?.step !== newState.initData?.step;
+        
+        if (stateChanged || stepChanged) {
+            animState.current.lastStateChangeTime = Date.now();
         }
 
         // Update Refs

@@ -16,7 +16,7 @@ export class RenderService {
     globalScale: number, 
     hoveredTileIndex: number,
     selectedTileIndex: number,
-    animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; }
+    animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; lastStateChangeTime: number; }
   ): RenderMetrics {
     
     const ctx: RenderContext = {

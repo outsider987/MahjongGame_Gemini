@@ -15,5 +15,6 @@ export type RenderContext = {
     lastTurnTime: number;
     lastDiscardTime: number;
     discardingPlayer: number; // ID or Index of the player who last discarded
+    lastStateChangeTime: number; // Timestamp of the last major state/step change
   };
 };

@@ -35,96 +35,135 @@ export class InitPhaseRenderService {
 
     private static drawWaiting(ctx: RenderContext) {
         const { p, globalScale } = ctx;
+        const t = p.millis() * 0.002;
+        const alpha = 150 + Math.sin(t) * 100;
+
         p.textAlign(p.CENTER);
         p.textSize(24 * globalScale);
-        p.fill(255);
+        p.fill(255, 255, 255, alpha);
         p.text("等待玩家加入...", 0, 0);
+        
         p.textSize(14 * globalScale);
         p.fill(255, 255, 255, 150);
         p.text("伺服器連線中", 0, 30 * globalScale);
+
+        // Rotating loading circle
+        p.push();
+        p.rotate(p.millis() * 0.003);
+        p.noFill();
+        p.stroke(255, 255, 255, 50);
+        p.strokeWeight(4);
+        p.arc(0, 0, 100 * globalScale, 100 * globalScale, 0, p.PI);
+        p.pop();
     }
 
-    private static drawDiceAnimation(ctx: RenderContext, values: number[]) {
-        const { p, globalScale } = ctx;
+    private static drawDiceAnimation(ctx: RenderContext, finalValues: number[]) {
+        const { p, globalScale, animation } = ctx;
         const size = 60 * globalScale;
         const gap = 20 * globalScale;
         
-        // Animation: Shake effect
-        // We use a sine wave on time to create intensity
-        const time = p.millis();
-        // The animation plays for roughly 2500ms. 
-        // 0-1800ms: Shaking. 1800-2500ms: Settled.
-        const phase = time % 2500;
-        const isSettling = phase > 1800;
+        // Use state change time to animate the roll
+        const elapsed = Date.now() - animation.lastStateChangeTime;
+        const rollDuration = 1800;
+        const isRolling = elapsed < rollDuration;
         
         // Decay Shake Intensity
         let shakeIntensity = 0;
-        if (!isSettling) {
+        let displayValues = [1, 1];
+
+        if (isRolling) {
             // High intensity start, decaying over time
-            shakeIntensity = p.map(phase, 0, 1800, 10, 0, true);
+            shakeIntensity = p.map(elapsed, 0, rollDuration, 15, 0, true);
+            
+            // Change numbers rapidly
+            if (p.frameCount % 5 === 0) {
+                displayValues = [
+                    Math.floor(p.random(1, 7)),
+                    Math.floor(p.random(1, 7))
+                ];
+            } else {
+                // Keep previous random (fake stability)
+                displayValues = [
+                    Math.floor(p.noise(p.frameCount) * 6) + 1,
+                    Math.floor(p.noise(p.frameCount + 100) * 6) + 1
+                ];
+            }
+        } else {
+            displayValues = finalValues;
         }
 
-        // Random shake offset
         const shakeX = p.random(-shakeIntensity, shakeIntensity);
         const shakeY = p.random(-shakeIntensity, shakeIntensity);
-        
-        // Rotation shake
-        const rot = p.random(-0.1 * shakeIntensity, 0.1 * shakeIntensity);
+        const rot = p.random(-0.02 * shakeIntensity, 0.02 * shakeIntensity);
 
         p.textAlign(p.CENTER);
         p.textSize(20 * globalScale);
         p.fill('#fbbf24');
-        p.text("莊家擲骰決定抓位順序", 0, -100 * globalScale);
+        p.text("莊家擲骰決定抓位順序", 0, -120 * globalScale);
 
         p.push();
         p.translate(shakeX, shakeY);
+
+        // Shadow for Dice
+        p.fill(0, 0, 0, 60);
+        p.noStroke();
+        p.rectMode(p.CENTER);
+        p.rect(0, 10 * globalScale, size * 2.5, size, 20);
 
         // Dice 1
         p.push();
         p.translate(-(size/2 + gap/2), 0);
         p.rotate(rot);
-        this.drawSingleDie(p, size, values[0]);
+        this.drawSingleDie(p, size, displayValues[0]);
         p.pop();
 
         // Dice 2
         p.push();
         p.translate((size/2 + gap/2), 0);
         p.rotate(-rot);
-        this.drawSingleDie(p, size, values[1]);
+        this.drawSingleDie(p, size, displayValues[1]);
         p.pop();
 
         p.pop();
     }
 
     private static drawSingleDie(p: any, size: number, value: number) {
-        // Shadow
-        p.noStroke();
-        p.fill(0, 0, 0, 50);
-        p.rectMode(p.CENTER);
-        p.rect(5, 5, size, size, 12);
-
-        // Die Body
         const ctx = p.drawingContext;
+        
+        // Die Body (Gradient)
         const grd = ctx.createLinearGradient(-size/2, -size/2, size/2, size/2);
         grd.addColorStop(0, '#ffffff');
-        grd.addColorStop(1, '#e2e8f0');
+        grd.addColorStop(1, '#d1d5db');
         ctx.fillStyle = grd;
-        p.rect(0, 0, size, size, 12);
+        
+        p.noStroke();
+        p.rectMode(p.CENTER);
+        p.rect(0, 0, size, size, size * 0.2);
+
+        // Inner bevel highlight
+        p.noFill();
+        p.stroke(255, 255, 255, 200);
+        p.strokeWeight(2);
+        p.rect(0, 0, size - 4, size - 4, size * 0.15);
 
         // Dots
-        const dotSize = size * 0.18;
-        const range = size * 0.25;
+        const dotSize = size * 0.16;
+        const range = size * 0.26;
 
         const drawDot = (x: number, y: number, col: string, s: number = dotSize) => {
             p.fill(col);
+            p.noStroke();
             p.circle(x, y, s);
+            // Specular on dot
+            p.fill(255, 255, 255, 50);
+            p.circle(x - s*0.2, y - s*0.2, s*0.3);
         };
         
         const RED = '#dc2626';
         const BLACK = '#171717';
 
         if (value === 1) {
-            drawDot(0, 0, RED, dotSize * 2.5);
+            drawDot(0, 0, RED, dotSize * 2.6);
         } else if (value === 2) {
             drawDot(-range, -range, BLACK); drawDot(range, range, BLACK);
         } else if (value === 3) {
@@ -141,107 +180,166 @@ export class InitPhaseRenderService {
 
     private static drawShufflingTiles(ctx: RenderContext) {
         const { p, globalScale } = ctx;
-        const w = 60 * globalScale;
-        const h = 80 * globalScale;
-        const radius = 100 * globalScale;
+        const w = 50 * globalScale;
+        const h = 70 * globalScale;
         
         p.textAlign(p.CENTER);
         p.textSize(20 * globalScale);
         p.fill('#fbbf24');
-        p.text("洗牌中...", 0, -150 * globalScale);
+        p.text("自動洗牌中...", 0, -180 * globalScale);
 
-        // Rotate tiles in a circle quickly
-        const speed = p.frameCount * 0.2;
-        
-        for(let i=0; i<4; i++) {
+        // "Washing Machine" Effect
+        const count = 16;
+        const baseRadius = 120 * globalScale;
+        const time = p.millis() * 0.002;
+
+        for(let i=0; i<count; i++) {
             p.push();
-            const angle = (p.TWO_PI / 4) * i + speed;
-            p.translate(Math.cos(angle) * radius, Math.sin(angle) * radius);
-            p.rotate(angle + p.HALF_PI);
+            
+            // Chaos Math
+            const offsetIdx = i * 0.5;
+            const radius = baseRadius + Math.sin(time * 2 + offsetIdx) * 40 * globalScale;
+            const angle = time + (p.TWO_PI / count) * i + Math.sin(time * 3 + i) * 0.5;
+            
+            const cx = Math.cos(angle) * radius;
+            const cy = Math.sin(angle) * radius;
+            
+            p.translate(cx, cy);
+            // Spin tile
+            p.rotate(angle + time * 2);
             
             // Draw Face Down Tile
-            p.translate(-w/2, -h/2);
+            p.rectMode(p.CENTER);
             p.fill('#047857'); // Tile Back Green
             p.stroke('#064e3b');
             p.strokeWeight(2);
-            p.rect(0, 0, w, h, 6);
+            p.rect(0, 0, w, h, 4);
             
             // Shine
             p.noStroke();
             p.fill(255,255,255,30);
-            p.rect(0,0,w,h,6); 
+            p.rect(0,0, w*0.8, h*0.8, 4); 
             
             p.pop();
         }
+        
+        // Center Whirlpool Overlay
+        p.noFill();
+        p.stroke('#fbbf24');
+        p.strokeWeight(2);
+        p.drawingContext.setLineDash([10, 20]);
+        p.circle(0, 0, baseRadius * 2.5);
+        p.drawingContext.setLineDash([]);
     }
 
     private static drawRevealWinds(ctx: RenderContext, assignment: Record<string, number>) {
-        const { p, globalScale } = ctx;
+        const { p, globalScale, animation } = ctx;
         const w = 70 * globalScale;
         const h = 96 * globalScale;
         
+        // Animation: Flip Tiles
+        const elapsed = Date.now() - animation.lastStateChangeTime;
+        const flipDuration = 800; // ms per tile flip effect
+        
         // Standard Layout: Bottom(0), Right(1), Top(2), Left(3)
         const positions = [
-            { x: 0, y: 150 * globalScale, label: "您" }, // Bottom
-            { x: 250 * globalScale, y: 0, label: "下家" }, // Right
-            { x: 0, y: -150 * globalScale, label: "對家" }, // Top
-            { x: -250 * globalScale, y: 0, label: "上家" }, // Left
+            { x: 0, y: 150 * globalScale, label: "您" },
+            { x: 250 * globalScale, y: 0, label: "下家" }, 
+            { x: 0, y: -150 * globalScale, label: "對家" }, 
+            { x: -250 * globalScale, y: 0, label: "上家" }, 
         ];
 
-        // Animation: Flip effect
-        // We assume this state lasts ~3 seconds.
-        // We want a flip animation that starts shortly after entering state.
-        // Since we don't have absolute state entry time in this stateless render,
-        // we use a looped helper or just open them. 
-        // To create a "Flip" visual, we can just keep them open as the previous state was "SHUFFLE" (Face Down).
-        // But to add juice, let's pulse the scale.
-        
-        const pulse = 1 + Math.sin(p.frameCount * 0.05) * 0.02;
-
         positions.forEach((pos, idx) => {
+            // Staggered Animation
+            const delay = idx * 200;
+            const localTime = elapsed - delay;
+            let progress = 0; // 0 = Back, 1 = Front
+            
+            if (localTime > 0) {
+                progress = Math.min(1, localTime / flipDuration);
+            }
+
+            // Scale X from 1 -> 0 -> 1 to simulate 3D Flip
+            // 0.0 - 0.5: Shrink (Back)
+            // 0.5 - 1.0: Grow (Front)
+            let scaleX = 1;
+            const isFaceUp = progress > 0.5;
+            
+            if (progress <= 0.5) {
+                scaleX = 1 - (progress * 2);
+            } else {
+                scaleX = (progress - 0.5) * 2;
+            }
+
             p.push();
             p.translate(pos.x, pos.y);
-            p.scale(pulse); // Subtle breathe effect
+            
+            // Flip Transform
+            p.scale(scaleX, 1);
 
-            // Wind Value: 1=East, 2=South, 3=West, 4=North
             const val = assignment[String(idx)] || 1;
             const tile: Tile = { id: 'init', suit: Suit.WINDS, value: val, isFlower: false };
             
-            // Draw Centered
             p.translate(-w/2, -h/2);
-            
-            // Render Flat Tile
-            TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
-            
-            // Highlight Dealer (East = 1)
-            if (val === 1) {
-                p.push();
-                p.translate(w/2, -25 * globalScale);
-                
-                // Glowing Dealer Indicator
-                p.drawingContext.shadowColor = '#ef4444';
-                p.drawingContext.shadowBlur = 15;
-                p.fill('#ef4444');
+
+            if (!isFaceUp) {
+                // Draw Back
+                p.fill('#047857'); // Jade
+                p.stroke('#022c22');
+                p.strokeWeight(1);
+                p.rect(0, 0, w, h, 6);
                 p.noStroke();
-                p.circle(0, 0, 24 * globalScale);
-                p.drawingContext.shadowBlur = 0;
-
-                p.fill(255);
-                p.textAlign(p.CENTER, p.CENTER);
-                p.textSize(12 * globalScale);
-                p.textStyle(p.BOLD);
-                p.text("莊", 0, 0);
-                p.pop();
+                p.fill(255,255,255,20);
+                p.rect(2, 2, w-4, h-4, 4);
+            } else {
+                // Draw Front (Face)
+                TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
+                
+                // Highlight Dealer
+                if (val === 1) {
+                    p.push();
+                    p.translate(w/2, -25 * globalScale);
+                    
+                    // Fixed scale for indicator (cancel parent flip scale)
+                    // Need to invert the X scale we applied earlier? 
+                    // Actually visual glitches are minor here, but let's try to just draw simple
+                    
+                    // Glowing Dealer Indicator
+                    p.drawingContext.shadowColor = '#ef4444';
+                    p.drawingContext.shadowBlur = 15;
+                    p.fill('#ef4444');
+                    p.noStroke();
+                    p.circle(0, 0, 24 * globalScale);
+                    p.drawingContext.shadowBlur = 0;
+    
+                    p.fill(255);
+                    p.textAlign(p.CENTER, p.CENTER);
+                    p.textSize(12 * globalScale);
+                    p.textStyle(p.BOLD);
+                    p.text("莊", 0, 0);
+                    p.pop();
+                }
             }
+            
+            p.pop(); // End Flip
 
-            // Label
+            // Label (Always visible, no flip)
             p.fill('#fbbf24');
             p.noStroke();
             p.textAlign(p.CENTER);
             p.textSize(16 * globalScale);
-            p.text(pos.label, w/2, h + 25*globalScale);
+            p.text(pos.label, pos.x, pos.y + h/2 + 25*globalScale);
 
-            p.pop();
         });
+        
+        // Instruction Text
+        p.push();
+        p.translate(0, -50 * globalScale);
+        const alpha = Math.min(255, elapsed * 0.1);
+        p.fill(255, 255, 255, alpha);
+        p.textAlign(p.CENTER);
+        p.textSize(22 * globalScale);
+        p.text("東風位為莊家", 0, 0);
+        p.pop();
     }
 }
