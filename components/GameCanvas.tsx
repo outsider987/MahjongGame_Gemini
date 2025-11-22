@@ -4,6 +4,7 @@ import { AppView, GameStateDTO, Player, Tile, ActionType, VisualEffect } from '.
 import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
 import { socketService } from '../services/SocketService';
+import { SoundService } from '../services/SoundService';
 import { Settings, X, LogOut, Volume2, VolumeX, RefreshCw, Wifi } from 'lucide-react';
 
 declare global {
@@ -83,6 +84,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
             animState.current.lastTurnTime = Date.now();
             // Reset selection on turn change
             selectedTileRef.current = -1;
+
+            // Sound: Turn Alert
+            if (newState.turn === 0) {
+                SoundService.playTurnAlert();
+            }
         }
 
         // 2. Detect Discard
@@ -97,9 +103,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
             if (newState.lastDiscard?.playerIndex === 0) {
                 selectedTileRef.current = -1;
             }
+
+            // Sound: Discard Clack
+            SoundService.playDiscard();
         }
 
-        // 3. Detect State/Step Change
+        // 3. Detect Draw (via Deck count decrease)
+        if (prev.deckCount > newState.deckCount) {
+            SoundService.playDraw();
+        }
+
+        // 4. Detect State/Step Change
         const stateChanged = prev.state !== newState.state;
         const stepChanged = prev.initData?.step !== newState.initData?.step;
         
@@ -118,6 +132,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
     socket.on("game:effect", (effectData: any) => {
         triggerEffect(effectData.type, effectData.text, effectData.position?.x, effectData.position?.y, effectData.variant, effectData.tile);
+        
+        // Sound: Game Effect
+        SoundService.playEffect(effectData.type);
     });
 
     return () => {
@@ -128,6 +145,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         socketService.disconnect();
     };
   }, []);
+
+  // Handle Mute Toggle
+  useEffect(() => {
+      SoundService.setMuted(isMuted);
+  }, [isMuted]);
 
 
   // --- Effect System ---
@@ -226,9 +248,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const handleDiscard = (tileIndex: number) => {
       selectedTileRef.current = -1;
       socketService.sendDiscard(tileIndex);
+      SoundService.playDiscard(); // Immediate feedback
   };
 
   const handlePlayerAction = (action: ActionType) => {
+      SoundService.playClick();
       socketService.sendAction(action);
       setAvailableActions([]); 
   };
@@ -246,6 +270,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         p.frameRate(60); 
         p.textFont("'Noto Serif TC', 'Roboto', serif");
         AssetLoader.generateAll(p);
+        
+        // Init Sound on User Interaction (First Click)
+        canvas.mousePressed(() => {
+            SoundService.init();
+        });
       };
 
       p.windowResized = () => {
@@ -292,6 +321,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       };
 
       p.mousePressed = () => {
+          // Ensure audio context is active on interaction
+          SoundService.init();
+
           const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
           const isRichii = gameRef.current.players[0]?.info.isRichii;
@@ -306,6 +338,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                    handleDiscard(hoveredTileRef.current);
                    hoveredTileRef.current = -1; 
                } else {
+                   SoundService.playClick(); // Click sound for selection
                    selectedTileRef.current = hoveredTileRef.current;
                }
           } else {
@@ -501,7 +534,7 @@ interface PlayerCardProps {
 const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isSelf = false }) => {
   const getPositionClasses = () => {
     switch(position) {
-      case 'bottom': return "bottom-36 left-4 flex-row items-end"; // Moved up to bottom-36 to avoid overlapping tiles
+      case 'bottom': return "bottom-4 left-4 flex-row items-end";
       case 'right': return "right-4 top-1/2 -translate-y-1/2 flex-col items-end";
       case 'top': return "top-4 left-1/2 -translate-x-1/2 flex-col items-center"; 
       case 'left': return "left-4 top-1/2 -translate-y-1/2 flex-col items-start";
@@ -509,7 +542,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isS
     }
   };
   return (
-    <div className={`absolute ${getPositionClasses()} flex gap-3 pointer-events-auto transition-all duration-300 ${isActive ? 'opacity-100 scale-105' : 'opacity-80 scale-100'}`}>
+    <div className={`absolute ${getPositionClasses()} flex gap-3 pointer-events-auto transition-all duration-300 ${isActive ? 'opacity-60 hover:opacity-100 scale-105' : 'opacity-90 scale-100'}`}>
       <div className={`relative group ${isSelf ? 'order-1' : ''}`}>
         {isActive && <div className="absolute -inset-2 bg-yellow-500/30 rounded-full blur-md animate-pulse"></div>}
         <div className={`relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden border-2 shadow-lg z-10 bg-[#1a1a1a] ${isActive ? 'border-yellow-400' : 'border-gray-600'}`}>
