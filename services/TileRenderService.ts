@@ -60,39 +60,59 @@ export class TileRenderService {
   }
 
   private static drawBoneMaterial(p: any, w: number, h: number, r: number, ctx: any) {
-      // Base Cream Color
+      // 1. Base Cream Color (Cylindrical shading for volume)
       const grd = ctx.createLinearGradient(0, 0, w, 0);
-      grd.addColorStop(0, COLORS.TILE_BONE_SHADOW);
-      grd.addColorStop(0.1, COLORS.TILE_BONE_WARM);
-      grd.addColorStop(0.9, COLORS.TILE_BONE_WARM);
-      grd.addColorStop(1, COLORS.TILE_BONE_SHADOW);
+      grd.addColorStop(0, COLORS.TILE_BONE_SHADOW);     // Edge shadow
+      grd.addColorStop(0.15, COLORS.TILE_BONE_WARM);   // Main surface
+      grd.addColorStop(0.5, '#fffefc');                // Highlight center (Luminous)
+      grd.addColorStop(0.85, COLORS.TILE_BONE_WARM);   // Main surface
+      grd.addColorStop(1, COLORS.TILE_BONE_SHADOW);     // Edge shadow
       ctx.fillStyle = grd;
       p.noStroke();
       p.rect(0, 0, w, h, r);
 
-      // Apply procedural noise texture
+      // 2. Subsurface Scattering (SSS) Fake
+      // Add a warm inner glow to simulate light bouncing inside the material
+      const sssGlow = ctx.createRadialGradient(w/2, h/2, w*0.1, w/2, h/2, w*0.8);
+      sssGlow.addColorStop(0, 'rgba(255, 253, 240, 0.4)'); // Very bright warm center
+      sssGlow.addColorStop(1, 'rgba(240, 230, 210, 0)');   // Fade out
+      ctx.fillStyle = sssGlow;
+      p.rect(0, 0, w, h, r);
+
+      // 3. Apply procedural noise texture
       const tex = AssetLoader.getBoneTexture();
       if (tex) {
          p.push();
          p.blendMode(p.MULTIPLY);
+         p.tint(255, 200); // Reduce texture intensity slightly for cleaner look
          p.image(tex, 0, 0, w, h);
+         p.noTint();
          p.pop();
       }
   }
 
   private static drawEdgeHighlight(p: any, w: number, h: number, r: number, ctx: any) {
-      // Top Specular Highlight
-      const grdHigh = ctx.createLinearGradient(0, 0, 0, h * 0.2);
-      grdHigh.addColorStop(0, COLORS.HIGHLIGHT_SPECULAR);
+      // Top Specular Highlight (Softer)
+      const grdHigh = ctx.createLinearGradient(0, 0, 0, h * 0.15);
+      grdHigh.addColorStop(0, 'rgba(255,255,255,0.5)'); // Reduced opacity
       grdHigh.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = grdHigh;
-      p.rect(0, 0, w, h * 0.2, r, r, 0, 0);
+      // Only highlight top part
+      p.rect(0, 0, w, h * 0.15, r, r, 0, 0);
 
-      // Corner Shine
+      // Soft Corner Shine (Rim Light)
       p.noFill();
-      p.stroke(255, 255, 255, 80);
-      p.strokeWeight(1);
+      p.stroke(255, 255, 255, 40); // Softer alpha
+      p.strokeWeight(0.5); // Thinner stroke
+      // Inset slightly
       p.rect(1, 1, w-2, h-2, r);
+      
+      // Extra shine on top edge only
+      p.stroke(255, 255, 255, 90);
+      p.beginShape();
+      p.vertex(r, 0.5);
+      p.vertex(w-r, 0.5);
+      p.endShape();
   }
 
   private static drawTileContent(p: any, tile: Tile, w: number, h: number, scale: number) {
