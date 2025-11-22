@@ -59,14 +59,15 @@ export class FlowerState implements IGameState {
           ctx.store.sortHand(this.currentIdx);
 
           // 4. Visual Effects - Show the flowers!
-          const pos = ctx.store.getPlayerPos(this.currentIdx);
+          // Use specific Flower Reveal Position (Front Top-Right)
+          const pos = ctx.store.getFlowerPos(this.currentIdx);
           
-          // Trigger TILE_POPUP for each flower
+          // Trigger FLOWER_REVEAL for each flower
           flowers.forEach((f: Tile, i: number) => {
              setTimeout(() => {
                 const name = this.getFlowerName(f.value);
                 ctx.socket.trigger('game:effect', { 
-                    type: 'TILE_POPUP', 
+                    type: 'FLOWER_REVEAL', 
                     tile: f,
                     text: `補花: ${name}`, 
                     position: pos 

@@ -64,6 +64,26 @@ export class MockStateStore {
       return { x: 0, y: 0 };
   }
 
+  // Get position for Flower Reveal Effect (Top-Right of Hand Front)
+  getFlowerPos(idx: number) {
+      // Screen Center is (0,0). Width ~1280, Height ~720-900.
+      // Offsets are relative to center.
+
+      // P0 (Self/Bottom): Hand centered bottom. Top-Right of hand area.
+      if (idx === 0) return { x: 400, y: 220 }; 
+      
+      // P1 (Right): Hand vertical right. Top-Right of hand area (Upper Right of screen).
+      if (idx === 1) return { x: 500, y: -200 };
+      
+      // P2 (Top): Hand centered top. Top-Right of hand area (Upper Left of screen).
+      if (idx === 2) return { x: -400, y: -220 };
+      
+      // P3 (Left): Hand vertical left. Top-Right of hand area (Lower Left of screen).
+      if (idx === 3) return { x: -500, y: 200 };
+      
+      return { x: 0, y: 0 };
+  }
+
   syncDto() {
     this.dto.deckCount = this.deck.length;
     this.dto.players = this.players.map((p, i) => ({

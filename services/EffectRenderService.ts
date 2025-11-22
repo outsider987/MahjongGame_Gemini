@@ -10,7 +10,8 @@ import {
   TilePopupRenderer,
   ChowEffectRenderer,
   PongEffectRenderer,
-  KongEffectRenderer
+  KongEffectRenderer,
+  FlowerRevealRenderer
 } from './EffectStrategies';
 
 export class EffectRenderService {
@@ -23,7 +24,8 @@ export class EffectRenderService {
       'TILE_POPUP': new TilePopupRenderer(),
       'ACTION_CHOW': new ChowEffectRenderer(),
       'ACTION_PONG': new PongEffectRenderer(),
-      'ACTION_KONG': new KongEffectRenderer()
+      'ACTION_KONG': new KongEffectRenderer(),
+      'FLOWER_REVEAL': new FlowerRevealRenderer()
   };
 
   static drawEffects(ctx: RenderContext, effects: VisualEffect[]) {

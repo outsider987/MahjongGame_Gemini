@@ -146,12 +146,12 @@ export class GameplayState implements IGameState {
       ctx.store.players[playerIdx].info.flowerCount++;
       ctx.store.players[playerIdx].info.flowers.push(flowerTile); // Store tile
 
-      const pos = ctx.store.getPlayerPos(playerIdx);
+      const pos = ctx.store.getFlowerPos(playerIdx);
       const name = this.getFlowerName(flowerTile.value);
       
-      // Visual Effect: Show the tile popping up
+      // Visual Effect: Show the tile popping up in the Reveal Zone
       ctx.socket.trigger('game:effect', { 
-          type: 'TILE_POPUP', 
+          type: 'FLOWER_REVEAL', 
           tile: flowerTile, 
           text: `補花: ${name}`, 
           position: pos 

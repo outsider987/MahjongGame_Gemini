@@ -20,11 +20,8 @@ export class PlayerRenderService {
      const MELD_W = TILE_W * 0.85;
      const MELD_H = TILE_H * 0.85;
      const GAP_HAND_MELD = 30 * s;
-     const GAP_MELD_FLOWER = 30 * s; // Gap between melds and flowers
      const GAP_NEW_TILE = 16 * s;
      const MELD_GAP = 8 * s;
-     const FLOWER_W = MELD_W * 0.9;
-     const FLOWER_H = MELD_H * 0.9;
      
      const SIDE_TILE_THICKNESS = 32 * s; 
      
@@ -46,11 +43,7 @@ export class PlayerRenderService {
         return acc + ((m?.tiles?.length || 0) * MELD_W) + MELD_GAP;
      }, 0);
      
-     const flowers = player.info?.flowers || [];
-     const flowerSizePx = flowers.length * FLOWER_W;
-
-     // Calculate Layout Size excluding flowers initially to center hand+melds if preferred, 
-     // or include everything. Let's group hand+melds. Flowers are extra.
+     // Calculate Layout Size
      const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
      
      let p0StartX = 0;
@@ -71,11 +64,6 @@ export class PlayerRenderService {
          if (melds.length > 0) {
             const meldStartX = startX + handSizePx + GAP_HAND_MELD;
             this.drawMelds(ctx, melds, meldStartX, 20 * s, MELD_W, MELD_H, 1, MELD_GAP);
-         }
-
-         if (flowers.length > 0) {
-            const flowerStartX = startX + handSizePx + GAP_HAND_MELD + meldSizePx + GAP_MELD_FLOWER;
-            this.drawFlowers(ctx, flowers, flowerStartX, 30 * s, FLOWER_W, FLOWER_H, 1);
          }
 
          p0StartX = startX;
@@ -101,11 +89,6 @@ export class PlayerRenderService {
              const meldStartY = startY + handSizePx + GAP_HAND_MELD;
              this.drawMelds(ctx, melds, meldStartY, 10 * s, MELD_W, MELD_H, 1, MELD_GAP);
          }
-
-         if (flowers.length > 0) {
-             const flowerStartY = startY + handSizePx + GAP_HAND_MELD + meldSizePx + GAP_MELD_FLOWER;
-             this.drawFlowers(ctx, flowers, flowerStartY, 20 * s, FLOWER_W, FLOWER_H, 1);
-         }
          
      } else if (index === 2) {
          // Top Player
@@ -119,11 +102,6 @@ export class PlayerRenderService {
          if (melds.length > 0) {
              const meldStartX = startX + handSizePx + GAP_HAND_MELD;
              this.drawMelds(ctx, melds, meldStartX, 10 * s, MELD_W, MELD_H, 1, MELD_GAP);
-         }
-
-         if (flowers.length > 0) {
-             const flowerStartX = startX + handSizePx + GAP_HAND_MELD + meldSizePx + GAP_MELD_FLOWER;
-             this.drawFlowers(ctx, flowers, flowerStartX, 20 * s, FLOWER_W, FLOWER_H, 1);
          }
 
      } else if (index === 3) {
@@ -147,11 +125,6 @@ export class PlayerRenderService {
          if (melds.length > 0) {
              const meldStartY = startY + fullLen + GAP_HAND_MELD;
              this.drawMelds(ctx, melds, meldStartY, 10 * s, MELD_W, MELD_H, 1, MELD_GAP);
-         }
-
-         if (flowers.length > 0) {
-             const flowerStartY = startY + fullLen + GAP_HAND_MELD + meldSizePx + GAP_MELD_FLOWER;
-             this.drawFlowers(ctx, flowers, flowerStartY, 20 * s, FLOWER_W, FLOWER_H, 1);
          }
      }
      p.pop();
@@ -406,27 +379,6 @@ export class PlayerRenderService {
              cx += (w * dir);
          }
          cx += (gap * dir);
-      });
-  }
-
-  private static drawFlowers(
-      ctx: RenderContext, flowers: Tile[], startX: number, y: number, w: number, h: number, 
-      dir: 1 | -1
-  ) {
-      const { p, globalScale } = ctx;
-      let cx = startX;
-      
-      flowers.forEach(flower => {
-         const drawX = dir === 1 ? cx : cx - w;
-         
-         // Optional: Group visual effect or slightly different look
-         // Use FLAT style for exposed flowers
-         // @ts-ignore
-         TileRenderService.drawTile(p, drawX, y, flower, w, h, 'FLAT', globalScale); 
-         
-         // Add a small "Spring" icon or decoration overhead?
-         
-         cx += (w * dir);
       });
   }
 }

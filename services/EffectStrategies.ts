@@ -68,6 +68,85 @@ const drawEffectText = (p: any, text: string, variant: string, alpha: number) =>
 // --- Concrete Strategies ---
 
 /**
+ * Flower Reveal: Appears in a mask area and fades out.
+ */
+export class FlowerRevealRenderer implements IEffectRenderer {
+  render(ctx: RenderContext, fx: VisualEffect) {
+      const { p, globalScale } = ctx;
+      if (!fx.tile) return;
+
+      // Extended life for "slowly disappear" (120 frames = ~2s at 60fps)
+      const maxLife = 120; 
+      const lifeRatio = fx.life / maxLife;
+      
+      // Fade Logic:
+      // 0.85 - 1.0: Fade In (Quick entry)
+      // 0.25 - 0.85: Stay fully visible
+      // 0.0 - 0.25: Fade Out (Slow exit)
+      let alpha = 1;
+      if (lifeRatio > 0.85) alpha = (1 - lifeRatio) / 0.15;
+      else if (lifeRatio < 0.25) alpha = lifeRatio / 0.25;
+      
+      p.push();
+      p.translate(fx.x, fx.y);
+      p.scale(globalScale);
+
+      const w = 100;
+      const h = 130;
+
+      // 1. Draw Mask Area (The "Mask" Effect)
+      // A dark, semi-transparent box with a gold border glow
+      const ctx2 = p.drawingContext;
+      
+      // Back Glow
+      ctx2.shadowColor = 'rgba(251, 191, 36, 0.6)'; // Gold glow
+      ctx2.shadowBlur = 25;
+      
+      // Box Background
+      p.fill(0, 0, 0, 220 * alpha); // Semi-transparent black
+      p.stroke(COLORS.UI_BORDER_GOLD);
+      p.strokeWeight(2);
+      // Fade border with alpha
+      const borderColor = p.color(COLORS.UI_BORDER_GOLD);
+      borderColor.setAlpha(255 * alpha);
+      p.stroke(borderColor);
+      
+      p.rectMode(p.CENTER);
+      p.rect(0, 0, w, h, 12);
+      
+      ctx2.shadowBlur = 0;
+
+      // 2. Draw Tile inside
+      p.push();
+      const tileScale = 1.0;
+      const tileW = 52 * tileScale;
+      const tileH = 72 * tileScale;
+      
+      // Apply alpha to tile via context globalAlpha
+      ctx2.globalAlpha = alpha;
+      
+      // Center the tile within the mask box
+      // Slightly offset Y to make room for text below
+      // @ts-ignore
+      TileRenderService.drawTile(p, -tileW/2, -tileH/2 - 10, fx.tile, tileW, tileH, 'FLAT', 1); 
+      
+      // 3. Text Label ("補花" etc)
+      if (fx.text) {
+          p.textAlign(p.CENTER, p.CENTER);
+          p.textSize(16);
+          p.textStyle(p.BOLD);
+          p.fill(255, 255, 255, 255 * alpha);
+          p.noStroke();
+          p.text(fx.text, 0, 40);
+      }
+      
+      ctx2.globalAlpha = 1;
+      p.pop();
+      p.pop();
+  }
+}
+
+/**
  * CHOW (吃): "Bite" animation.
  * Vertical snap: Top and bottom halves close in.
  */
