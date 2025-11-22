@@ -51,6 +51,9 @@ export class MockBackend {
     discards: Tile[];
     melds: Meld[];
   }[];
+  
+  private timerInterval: any = null;
+  private botTimeout: any = null;
 
   constructor() {
     this.socket = new MockSocket(this);
@@ -92,15 +95,24 @@ export class MockBackend {
         }
         break;
       case 'game:restart':
+        this.clearTimers();
         this.initGame();
         break;
     }
   }
 
+  private clearTimers() {
+      if (this.timerInterval) clearInterval(this.timerInterval);
+      if (this.botTimeout) clearTimeout(this.botTimeout);
+      this.timerInterval = null;
+      this.botTimeout = null;
+  }
+
   private initGame() {
     this.deck = generateDeck();
+    this.clearTimers();
     
-    // Setup Players
+    // Setup Players Structure (Empty Hands initially)
     this.players = [0, 1, 2, 3].map(i => ({
       info: {
         id: i === 0 ? 10001 : MOCK_PLAYERS[i].id,
@@ -117,6 +129,22 @@ export class MockBackend {
       melds: []
     }));
 
+    // STATE_INIT: Seat Grabbing Phase (抓位)
+    this.state.turn = -1;
+    this.state.state = 'STATE_INIT'; // 開局抓位狀態
+    this.state.actionTimer = 0;
+    this.broadcastState();
+
+    // Show visual effect for Seat Grabbing
+    this.socket.trigger('game:effect', { type: 'TEXT', text: '正在抓位...' });
+
+    // Delay to simulate the process, then deal tiles
+    setTimeout(() => {
+        this.dealTiles();
+    }, 2000);
+  }
+
+  private dealTiles() {
     // Deal Tiles (16 each)
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 16; j++) {
@@ -129,95 +157,126 @@ export class MockBackend {
 
     // Dealer (P0) gets 17th tile
     this.players[0].hand.push(this.deck.pop()!);
+    // Note: We do NOT sort P0 hand here so the 17th tile is the "new" one
     
     this.state.turn = 0; // P0 starts
     this.state.state = 'DISCARD';
     this.state.lastDiscard = null;
-    this.broadcastState();
     
+    this.broadcastState();
     this.socket.trigger('game:effect', { type: 'TEXT', text: '遊戲開始' });
+    
+    // Start the turn timer for the Dealer
+    this.startTurnTimer();
+  }
+
+  private startTurnTimer() {
+      if (this.timerInterval) clearInterval(this.timerInterval);
+      
+      // 10 Seconds Thinking Time per prompt
+      this.state.actionTimer = 10;
+      this.broadcastState();
+
+      this.timerInterval = setInterval(() => {
+          this.state.actionTimer--;
+          
+          if (this.state.actionTimer <= 0) {
+              this.handleTimeout();
+          } else {
+              // Broadcast time updates
+              this.broadcastState(); 
+          }
+      }, 1000);
+  }
+
+  private handleTimeout() {
+      this.clearTimers();
+      const currentPlayerIdx = this.state.turn;
+      const player = this.players[currentPlayerIdx];
+      
+      // Auto discard the NEWEST tile (last in the array)
+      // This assumes the new tile was pushed to the end and hand was not sorted yet
+      const tileIndex = player.hand.length - 1;
+      
+      // Visual feedback
+      this.socket.trigger('game:effect', { type: 'TEXT', text: '超時自動出牌' });
+      
+      this.performDiscard(currentPlayerIdx, tileIndex);
   }
 
   private handleHumanDiscard(tileIndex: number) {
     if (this.state.turn !== 0) return;
+    
+    // Stop the timer since human acted
+    this.clearTimers();
+    this.performDiscard(0, tileIndex);
+  }
 
-    const p0 = this.players[0];
-    if (tileIndex < 0 || tileIndex >= p0.hand.length) return;
+  private performDiscard(playerIdx: number, tileIndex: number) {
+    const player = this.players[playerIdx];
+    if (tileIndex < 0 || tileIndex >= player.hand.length) return;
 
-    const tile = p0.hand.splice(tileIndex, 1)[0];
-    p0.discards.push(tile);
-    this.sortHand(p0.hand);
+    const tile = player.hand.splice(tileIndex, 1)[0];
+    player.discards.push(tile);
+    
+    // Important: Sort hand AFTER discard, so the hand structure is clean for next wait
+    this.sortHand(player.hand);
 
-    this.state.lastDiscard = { tile, playerIndex: 0 };
-    this.state.state = 'WAIT';
+    this.state.lastDiscard = { tile, playerIndex: playerIdx };
+    this.state.state = 'WAIT'; // State where other players could interact (Pong/Kong)
     this.broadcastState();
 
-    // Simple delay before next player
+    // Check for wins/interactions here (Mock skipped for brevity)
+    
+    // Delay before next turn
     setTimeout(() => {
-        this.nextTurn(1);
+        this.nextTurn(playerIdx + 1);
     }, 800);
   }
 
   private nextTurn(playerIdx: number) {
+    this.clearTimers();
+    
     const idx = playerIdx % 4;
     this.state.turn = idx;
 
     // Draw Tile
     if (this.deck.length === 0) {
         this.socket.trigger('game:effect', { type: 'TEXT', text: '流局' });
+        this.state.state = 'GAME_OVER';
+        this.broadcastState();
         return;
     }
 
     const newTile = this.deck.pop()!;
     this.players[idx].hand.push(newTile);
+    // NOTE: Do NOT sort here. Keep new tile at the end for auto-discard logic.
     
-    this.state.lastDiscard = null; // Reset last discard on draw
-    this.broadcastState();
-
+    this.state.lastDiscard = null; 
+    
     if (idx === 0) {
-        // Human Turn
         this.state.state = 'DISCARD';
-        this.broadcastState();
     } else {
-        // Bot Turn
         this.state.state = 'THINKING';
-        this.broadcastState();
-        
-        // Simulate Thinking
-        setTimeout(() => {
+        // Simulate Bot "Thinking" but ensure they act within the timer window
+        // If this timeout fails, the main server timer (startTurnTimer) will catch it.
+        this.botTimeout = setTimeout(() => {
             this.botDiscard(idx);
-        }, 1000 + Math.random() * 1000);
+        }, 1500 + Math.random() * 2000);
     }
+
+    // Start the hard limit timer for EVERYONE (Human and Bot)
+    this.startTurnTimer();
   }
 
   private botDiscard(playerIdx: number) {
+    // Bot acted, so we clear the hard limit timer
+    this.clearTimers();
+    
     const player = this.players[playerIdx];
-    // Simple AI: Random discard (excluding flowers/bonus if we had logic for that)
-    // For now, random index
+    // Random discard
     const discardIdx = Math.floor(Math.random() * player.hand.length);
-    const tile = player.hand.splice(discardIdx, 1)[0];
-    
-    player.discards.push(tile);
-    this.sortHand(player.hand);
-    
-    this.state.lastDiscard = { tile, playerIndex: playerIdx };
-    this.broadcastState();
-
-    // Check if Human can PONG/WIN (Mock logic: random chance to show buttons for demo)
-    // In a real engine, we'd check tiles.
-    /* 
-    if (Math.random() > 0.8) {
-         this.state.availableActions = ['PONG', 'PASS'];
-         this.broadcastState();
-         // Wait for human action...
-         return; 
-    }
-    */
-
-    // Pass to next
-    setTimeout(() => {
-        this.nextTurn(playerIdx + 1);
-    }, 800);
+    this.performDiscard(playerIdx, discardIdx);
   }
 
   private broadcastState() {
@@ -234,7 +293,7 @@ export class MockBackend {
       turn: this.state.turn,
       state: this.state.state,
       lastDiscard: this.state.lastDiscard,
-      actionTimer: 15, // Mock timer
+      actionTimer: this.state.actionTimer, 
       availableActions: this.state.availableActions
     };
     this.socket.trigger('game:state', dto);

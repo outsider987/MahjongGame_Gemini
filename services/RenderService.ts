@@ -123,7 +123,8 @@ export class RenderService {
     p.rectMode(p.CENTER);
     p.rect(0, 0, boxSize, boxSize, 20);
     
-    const timeLeft = Math.ceil((game.actionTimer || 0) / 30);
+    // Corrected Timer Logic: Backend sends seconds directly, no need to divide by 30
+    const timeLeft = game.actionTimer !== undefined ? game.actionTimer : 0;
     const isInterrupt = game.state === 'INTERRUPT';
     
     p.noStroke();
