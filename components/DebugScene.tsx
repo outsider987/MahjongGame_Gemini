@@ -157,19 +157,19 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
             <GameCanvas setView={setView} />
 
             {/* Debug Sidebar */}
-            <div className={`absolute top-0 right-0 h-full bg-[#111]/90 backdrop-blur-xl border-l border-white/10 shadow-2xl transition-all duration-300 z-[100] flex flex-col ${isPanelOpen ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
+            <div className={`absolute top-0 right-0 h-full bg-black/60 backdrop-blur-md border-l border-white/10 shadow-2xl transition-all duration-300 z-[100] flex flex-col ${isPanelOpen ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
                 
                 {/* Toggle Button */}
                 <button 
                     onClick={() => setIsPanelOpen(!isPanelOpen)}
-                    className="absolute -left-12 top-20 bg-yellow-500 hover:bg-yellow-400 text-black p-3 rounded-l-xl font-bold shadow-[0_0_20px_rgba(234,179,8,0.3)] border-y border-l border-yellow-300 flex items-center justify-center w-12 h-14 transition-all"
+                    className="absolute -left-12 top-20 bg-yellow-500/80 hover:bg-yellow-400/90 backdrop-blur-sm text-black p-3 rounded-l-xl font-bold shadow-[0_0_20px_rgba(234,179,8,0.2)] border-y border-l border-yellow-300/40 flex items-center justify-center w-12 h-14 transition-all"
                 >
                    {isPanelOpen ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
                 </button>
 
                 {/* Header */}
-                <div className="flex-none p-5 border-b border-white/10 bg-black/20">
-                     <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <div className="flex-none p-5 border-b border-white/5 bg-black/30">
+                     <h2 className="text-xl font-black text-white/90 flex items-center gap-2">
                         <Box className="text-yellow-500" />
                         DEBUG MODE
                      </h2>
@@ -177,7 +177,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex p-2 gap-1 bg-black/40">
+                <div className="flex p-2 gap-1 bg-black/20">
                     {[
                         { id: 'TABLE', icon: Grid },
                         { id: 'EFFECTS', icon: Zap },
@@ -187,7 +187,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as TabType)}
-                            className={`flex-1 py-2 rounded-lg flex justify-center items-center transition-colors ${activeTab === tab.id ? 'bg-yellow-600 text-white shadow-lg' : 'text-gray-500 hover:bg-white/10 hover:text-gray-200'}`}
+                            className={`flex-1 py-2 rounded-lg flex justify-center items-center transition-all ${activeTab === tab.id ? 'bg-yellow-600/80 text-white shadow-lg backdrop-blur-sm' : 'text-gray-500 hover:bg-white/5 hover:text-gray-200'}`}
                         >
                             <tab.icon size={18} />
                         </button>
@@ -200,22 +200,22 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                     {/* TABLE TAB (River Controls) */}
                     {activeTab === 'TABLE' && (
                         <div className="space-y-4 animate-fadeIn">
-                             <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                             <div className="bg-black/40 p-3 rounded-xl border border-white/5">
                                  <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">River (Discards)</h3>
                                  <div className="grid grid-cols-2 gap-2">
-                                     <button onClick={addDiscard} className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 py-2 rounded-lg text-xs font-bold transition-all">
+                                     <button onClick={addDiscard} className="bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/30 py-2 rounded-lg text-xs font-bold transition-all backdrop-blur-sm">
                                          + 1 Tile
                                      </button>
-                                     <button onClick={fillRiver} className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 py-2 rounded-lg text-xs font-bold transition-all">
+                                     <button onClick={fillRiver} className="bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/30 py-2 rounded-lg text-xs font-bold transition-all backdrop-blur-sm">
                                          Fill (Stress Test)
                                      </button>
-                                     <button onClick={clearDiscards} className="col-span-2 bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2">
+                                     <button onClick={clearDiscards} className="col-span-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 border border-red-500/30 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
                                          <Trash2 size={14} /> Clear River
                                      </button>
                                  </div>
                              </div>
                              
-                             <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-200/70">
+                             <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/10 text-xs text-yellow-200/60">
                                  Use "Fill" to check if discard tiles overlap with the player hand or UI elements on different screen sizes.
                              </div>
                         </div>
@@ -224,20 +224,20 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                     {/* EFFECTS TAB */}
                     {activeTab === 'EFFECTS' && (
                         <div className="space-y-4 animate-fadeIn">
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                            <div className="bg-black/40 p-3 rounded-xl border border-white/5">
                                 <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Actions</h3>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => triggerEffect('ACTION_PONG', 'BLUE', '碰')} className="bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold">碰 (Pong)</button>
-                                    <button onClick={() => triggerEffect('ACTION_CHOW', 'GREEN', '吃')} className="bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold">吃 (Chow)</button>
-                                    <button onClick={() => triggerEffect('ACTION_KONG', 'PURPLE', '槓')} className="bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg font-bold">槓 (Kong)</button>
-                                    <button onClick={() => triggerEffect('SHOCKWAVE', 'HU', '胡了')} className="bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg font-bold">胡 (Hu)</button>
+                                    <button onClick={() => triggerEffect('ACTION_PONG', 'BLUE', '碰')} className="bg-blue-600/80 hover:bg-blue-500/90 text-white py-2 rounded-lg font-bold backdrop-blur-sm">碰 (Pong)</button>
+                                    <button onClick={() => triggerEffect('ACTION_CHOW', 'GREEN', '吃')} className="bg-green-600/80 hover:bg-green-500/90 text-white py-2 rounded-lg font-bold backdrop-blur-sm">吃 (Chow)</button>
+                                    <button onClick={() => triggerEffect('ACTION_KONG', 'PURPLE', '槓')} className="bg-purple-600/80 hover:bg-purple-500/90 text-white py-2 rounded-lg font-bold backdrop-blur-sm">槓 (Kong)</button>
+                                    <button onClick={() => triggerEffect('SHOCKWAVE', 'HU', '胡了')} className="bg-red-600/80 hover:bg-red-500/90 text-white py-2 rounded-lg font-bold backdrop-blur-sm">胡 (Hu)</button>
                                 </div>
                             </div>
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                            <div className="bg-black/40 p-3 rounded-xl border border-white/5">
                                 <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Visuals</h3>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => triggerEffect('LIGHTNING', 'GOLD', '')} className="bg-yellow-600/30 text-yellow-200 border border-yellow-500/50 py-2 rounded-lg text-xs font-bold">⚡ Lightning</button>
-                                    <button onClick={triggerFlower} className="bg-pink-600/30 text-pink-200 border border-pink-500/50 py-2 rounded-lg text-xs font-bold">🌸 Flower</button>
+                                    <button onClick={() => triggerEffect('LIGHTNING', 'GOLD', '')} className="bg-yellow-600/30 text-yellow-200 border border-yellow-500/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">⚡ Lightning</button>
+                                    <button onClick={triggerFlower} className="bg-pink-600/30 text-pink-200 border border-pink-500/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">🌸 Flower</button>
                                 </div>
                             </div>
                         </div>
@@ -246,25 +246,25 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                     {/* HANDS TAB */}
                     {activeTab === 'HANDS' && (
                         <div className="space-y-4 animate-fadeIn">
-                             <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                             <div className="bg-black/40 p-3 rounded-xl border border-white/5">
                                 <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Presets</h3>
                                 <div className="space-y-2">
-                                    <button onClick={() => setHand('FULL_FLUSH')} className="w-full bg-emerald-900/50 hover:bg-emerald-800 text-emerald-200 border border-emerald-700 py-2 rounded-lg text-xs font-bold">
+                                    <button onClick={() => setHand('FULL_FLUSH')} className="w-full bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-200 border border-emerald-700/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         清一色 (Full Flush)
                                     </button>
-                                    <button onClick={() => setHand('HONORS')} className="w-full bg-indigo-900/50 hover:bg-indigo-800 text-indigo-200 border border-indigo-700 py-2 rounded-lg text-xs font-bold">
+                                    <button onClick={() => setHand('HONORS')} className="w-full bg-indigo-900/40 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         大四喜 (Big Four Winds)
                                     </button>
-                                    <button onClick={() => setHand('THIRTEEN')} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 py-2 rounded-lg text-xs font-bold">
+                                    <button onClick={() => setHand('THIRTEEN')} className="w-full bg-slate-800/60 hover:bg-slate-700/80 text-slate-200 border border-slate-600/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         國士無雙 (13 Orphans)
                                     </button>
                                 </div>
                              </div>
                              <div className="grid grid-cols-2 gap-2">
-                                 <button onClick={addTileToHand} className="bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                                 <button onClick={addTileToHand} className="bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 backdrop-blur-sm">
                                     <LayoutGrid size={14} /> +1 Tile
                                  </button>
-                                 <button onClick={() => setHand('EMPTY')} className="bg-red-500/10 hover:bg-red-500/30 text-red-300 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                                 <button onClick={() => setHand('EMPTY')} className="bg-red-500/20 hover:bg-red-500/40 text-red-300 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 backdrop-blur-sm">
                                     <Trash2 size={14} /> Clear
                                  </button>
                              </div>
@@ -274,16 +274,16 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                      {/* GAME TAB */}
                      {activeTab === 'GAME' && (
                         <div className="space-y-4 animate-fadeIn">
-                             <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                             <div className="bg-black/40 p-3 rounded-xl border border-white/5">
                                 <h3 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">State Control</h3>
                                 <div className="space-y-2">
-                                    <button onClick={() => forceState('RESTART')} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+                                    <button onClick={() => forceState('RESTART')} className="w-full bg-blue-600/70 hover:bg-blue-500/80 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 backdrop-blur-sm">
                                         <RotateCcw size={16} /> Restart Game
                                     </button>
-                                    <button onClick={() => forceState('FORCE_DISCARD')} className="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 rounded-lg text-xs font-bold">
+                                    <button onClick={() => forceState('FORCE_DISCARD')} className="w-full bg-gray-700/50 hover:bg-gray-600/60 text-gray-200 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         Force Discard Phase
                                     </button>
-                                    <button onClick={() => forceState('FORCE_HU')} className="w-full bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-700 py-2 rounded-lg text-xs font-bold">
+                                    <button onClick={() => forceState('FORCE_HU')} className="w-full bg-red-900/40 hover:bg-red-800/60 text-red-200 border border-red-700/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         Enable HU Button
                                     </button>
                                 </div>
@@ -294,7 +294,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/10 bg-black/40">
+                <div className="p-4 border-t border-white/10 bg-black/30">
                     <button 
                         onClick={() => setView(AppView.LOBBY)}
                         className="w-full flex items-center justify-center gap-2 text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
