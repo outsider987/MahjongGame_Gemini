@@ -1,4 +1,5 @@
 
+
 import { RenderContext } from './RenderTypes';
 import { InitData, Suit, Tile } from '../types';
 import { TileRenderService } from './TileRenderService';
@@ -208,17 +209,9 @@ export class InitPhaseRenderService {
             // Spin tile
             p.rotate(angle + time * 2);
             
-            // Draw Face Down Tile
-            p.rectMode(p.CENTER);
-            p.fill('#047857'); // Tile Back Green
-            p.stroke('#064e3b');
-            p.strokeWeight(2);
-            p.rect(0, 0, w, h, 4);
-            
-            // Shine
-            p.noStroke();
-            p.fill(255,255,255,30);
-            p.rect(0,0, w*0.8, h*0.8, 4); 
+            // Render proper face-down tile asset
+            // We draw centered at current translation
+            TileRenderService.drawTile(p, -w/2, -h/2, null, w, h, 'BACK_FLAT', globalScale);
             
             p.pop();
         }
@@ -249,14 +242,20 @@ export class InitPhaseRenderService {
             { x: -250 * globalScale, y: 0, label: "上家" }, 
         ];
 
+        let allRevealed = true;
+
         positions.forEach((pos, idx) => {
             // Staggered Animation
             const delay = idx * 200;
             const localTime = elapsed - delay;
             let progress = 0; // 0 = Back, 1 = Front
             
-            if (localTime > 0) {
+            if (localTime < 0) {
+                progress = 0;
+                allRevealed = false;
+            } else {
                 progress = Math.min(1, localTime / flipDuration);
+                if (progress < 1) allRevealed = false;
             }
 
             // Scale X from 1 -> 0 -> 1 to simulate 3D Flip
@@ -278,25 +277,17 @@ export class InitPhaseRenderService {
             const val = assignment[String(idx)] || 1;
             const tile: Tile = { id: 'init', suit: Suit.WINDS, value: val, isFlower: false };
             
-            p.translate(-w/2, -h/2);
-
             if (!isFaceUp) {
-                // Draw Back
-                p.fill('#047857'); // Jade
-                p.stroke('#022c22');
-                p.strokeWeight(1);
-                p.rect(0, 0, w, h, 6);
-                p.noStroke();
-                p.fill(255,255,255,20);
-                p.rect(2, 2, w-4, h-4, 4);
+                // Draw Back (Face Down) using high-quality asset
+                TileRenderService.drawTile(p, -w/2, -h/2, null, w, h, 'BACK_FLAT', globalScale);
             } else {
-                // Draw Front (Face)
-                TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
+                // Draw Front (Face Up)
+                TileRenderService.drawTile(p, -w/2, -h/2, tile, w, h, 'FLAT', globalScale);
                 
                 // Highlight Dealer
                 if (val === 1) {
                     p.push();
-                    p.translate(w/2, -25 * globalScale);
+                    p.translate(0, -25 * globalScale - h/2);
                     
                     // Glowing Dealer Indicator
                     p.drawingContext.shadowColor = '#ef4444';
@@ -326,14 +317,16 @@ export class InitPhaseRenderService {
 
         });
         
-        // Instruction Text
+        // Instruction Text (Dynamic)
+        const titleText = allRevealed ? "東風位為莊家 (抓位結果)" : "抓位中...";
+        
         p.push();
         p.translate(0, -50 * globalScale);
         const alpha = Math.min(255, elapsed * 0.1);
         p.fill(255, 255, 255, alpha);
         p.textAlign(p.CENTER);
         p.textSize(22 * globalScale);
-        p.text("東風位為莊家 (抓位結果)", 0, 0);
+        p.text(titleText, 0, 0);
         p.pop();
     }
 }

@@ -11,7 +11,7 @@ export class TileRenderService {
    */
   static drawTile(
       p: any, x: number, y: number, tile: Tile | null, w: number, h: number, 
-      type: 'STANDING' | 'FLAT' | 'BACK_STANDING' | 'SIDE_STANDING_R' | 'SIDE_STANDING_L', scale: number
+      type: 'STANDING' | 'FLAT' | 'BACK_STANDING' | 'SIDE_STANDING_R' | 'SIDE_STANDING_L' | 'BACK_FLAT', scale: number
   ) {
      p.push();
      p.translate(x, y);
@@ -34,6 +34,9 @@ export class TileRenderService {
              break;
          case 'SIDE_STANDING_L': // Opponent Left
              this.drawSideStandingTile(p, w, h, scale, true);
+             break;
+         case 'BACK_FLAT': // Face Down Flat (Shuffle/Init)
+             this.drawBackFlatTile(p, w, h, scale);
              break;
      }
 
@@ -258,6 +261,24 @@ export class TileRenderService {
       p.noStroke();
       p.fill(255, 255, 255, 60);
       p.rect(0, 0, w, 4*scale, r, r, 0, 0);
+  }
+  
+  // --- 3.5 Back Flat (Facedown Shuffle/Wall) ---
+  private static drawBackFlatTile(p: any, w: number, h: number, scale: number) {
+      const ctx = p.drawingContext;
+      const r = 4 * scale;
+      const depth = 6 * scale; // Visual depth shadow
+
+      // 1. Shadow (Simple underneath)
+      p.fill(COLORS.SHADOW_AMBIENT);
+      p.noStroke();
+      p.rect(3*scale, 3*scale, w, h, r);
+
+      // 2. Jade Body (Full)
+      this.drawJadeMaterial(p, w, h, r, ctx);
+      
+      // 3. Gloss
+      this.drawGlossyHighlight(p, w, h, r, ctx);
   }
 
   // --- 4. Side Standing (Opponents L/R) ---

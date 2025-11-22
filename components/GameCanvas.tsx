@@ -501,7 +501,7 @@ interface PlayerCardProps {
 const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isSelf = false }) => {
   const getPositionClasses = () => {
     switch(position) {
-      case 'bottom': return "bottom-6 left-6 flex-row items-end";
+      case 'bottom': return "bottom-36 left-4 flex-row items-end"; // Moved up to bottom-36 to avoid overlapping tiles
       case 'right': return "right-4 top-1/2 -translate-y-1/2 flex-col items-end";
       case 'top': return "top-4 left-1/2 -translate-x-1/2 flex-col items-center"; 
       case 'left': return "left-4 top-1/2 -translate-y-1/2 flex-col items-start";

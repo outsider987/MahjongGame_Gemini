@@ -53,7 +53,14 @@ export class PlayerRenderService {
          
          const tileWidthInHand = TILE_W;
          const handSizePx = (visualHandCount * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
-         const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
+         
+         // Calculate unscaled meld width first for fit logic
+         const totalMeldWidthUnscaled = melds.reduce((acc: number, m: any) => {
+             return acc + ((m?.tiles?.length || 0) * MELD_W) + MELD_GAP;
+         }, 0);
+
+         // Main group size = Melds + Gap + Hand (Order swapped logic conceptually, total width same)
+         const mainGroupSize = handSizePx + (melds.length > 0 ? GAP_HAND_MELD + totalMeldWidthUnscaled : 0);
          
          // --- Mobile Fit Logic ---
          // If hand is wider than screen, scale it down locally to fit
@@ -75,25 +82,34 @@ export class PlayerRenderService {
          const EFF_GAP_MELD = MELD_GAP * fitScale;
          
          const effHandSize = (visualHandCount * EFF_TILE_W) + (hasNew ? EFF_GAP_NEW : 0);
-         const effTotalSize = effHandSize + (meldSizePx > 0 ? EFF_GAP_MELD_GRP + (meldSizePx * fitScale) : 0);
+         
+         // Recalculate effective meld size with scale
+         const effMeldSize = melds.reduce((acc: number, m: any) => {
+             return acc + ((m?.tiles?.length || 0) * EFF_MELD_W) + EFF_GAP_MELD;
+         }, 0);
+
+         const effTotalSize = effHandSize + (melds.length > 0 ? EFF_GAP_MELD_GRP + effMeldSize : 0);
 
          let startX = (width - effTotalSize) / 2;
          const endX = startX + effTotalSize;
-         const limitX = width - (P0_MARGIN_RIGHT * fitScale); // Scale margin too
+         const limitX = width - (20 * fitScale); // Simple margin
          
-         // If room permits, offset to left to avoid UI buttons on right, but keep centered on small screens
-         if (fitScale === 1 && endX > limitX) startX = limitX - effTotalSize;
          if (startX < safeMargin) startX = safeMargin;
 
-         // Draw Hand with effective sizes
-         this.drawHandSequence(ctx, hand, startX, 0, EFF_TILE_W, EFF_TILE_H, 1, 'STANDING', hasNew, 0, EFF_GAP_NEW, isActive, fitScale);
-         
+         let currentX = startX;
+
+         // DRAW LEFT: Melds (if any)
          if (melds.length > 0) {
-            const meldStartX = startX + effHandSize + EFF_GAP_MELD_GRP;
-            this.drawMelds(ctx, melds, meldStartX, 20 * s * fitScale, EFF_MELD_W, EFF_MELD_H, 1, EFF_GAP_MELD);
+            this.drawMelds(ctx, melds, currentX, 20 * s * fitScale, EFF_MELD_W, EFF_MELD_H, 1, EFF_GAP_MELD);
+            // Advance cursor by meld block + gap
+            currentX += effMeldSize + EFF_GAP_MELD_GRP;
          }
 
-         p0StartX = startX;
+         // DRAW RIGHT: Concealed Hand
+         this.drawHandSequence(ctx, hand, currentX, 0, EFF_TILE_W, EFF_TILE_H, 1, 'STANDING', hasNew, 0, EFF_GAP_NEW, isActive, fitScale);
+
+         // Capture hit test metrics based on where the hand actually starts
+         p0StartX = currentX;
          p0EffectiveTileW = EFF_TILE_W;
 
      } else if (index === 1) {
