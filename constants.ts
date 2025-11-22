@@ -5,13 +5,24 @@ export const COLORS = {
   TABLE_BG_LIGHT: '#0f4c3a', // Rich Green
   
   // UI Colors
-  UI_GLASS_DARK: 'rgba(0, 0, 0, 0.75)',
+  UI_GLASS_DARK: 'rgba(0, 0, 0, 0.85)',
   UI_GLASS_LIGHT: 'rgba(255, 255, 255, 0.1)',
   UI_BORDER_GOLD: '#d4af37',
   
-  TILE_BACK: '#022c22', // Very dark green
-  TILE_FACE: '#fdfbf7', // Bone white
-  TILE_SIDE: '#d1d5db', // Silverish side
+  // Realistic Material Colors
+  TILE_BACK_MAIN: '#047857', // Jade Green (Emerald 600)
+  TILE_BACK_LIGHT: '#10b981', // Lighter Jade (Emerald 500)
+  TILE_BACK_DARK: '#064e3b', // Dark edge (Emerald 800)
+  
+  TILE_FACE_MAIN: '#fdfbf7', // Ivory / Bone
+  TILE_FACE_SHADOW: '#cbd5e1', // Side of the bone
+  
+  // Split View Section Colors
+  TILE_SECTION_BONE: '#f8fafc', // Slate 50
+  TILE_SECTION_BAMBOO: '#065f46', // Emerald 800
+  
+  TILE_SIDE_HIGHLIGHT: 'rgba(255,255,255,0.4)',
+  TILE_SHADOW: 'rgba(0,0,0,0.4)',
   
   GOLD_TEXT: '#fbbf24', // Amber 400
   SCORE_PLUS: '#4ade80', // Green 400
