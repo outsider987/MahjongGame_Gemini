@@ -13,6 +13,7 @@ export enum GameStateEnum {
   INTERRUPT_CHECK = 'STATE_INTERRUPT_CHECK',
   RESOLVE_ACTION = 'STATE_RESOLVE_ACTION',
   GAME_OVER = 'STATE_GAME_OVER',
+  THINKING = 'STATE_THINKING',
 }
 
 export enum Suit {
@@ -36,6 +37,7 @@ export interface Player {
   name: string;
   avatar: string;
   score: number;
+  roundScoreDelta?: number; // Score change this round
   isDealer: boolean; 
   flowerCount: number;
   flowers: Tile[]; // Specific flower tiles owned
@@ -43,6 +45,9 @@ export interface Player {
   seatWind: string; // The wind of the seat relative to the dealer
   isRichii: boolean;        // Is the hand locked in Ready state?
   richiiDiscardIndex: number; // The index of the discard tile that was rotated (-1 if none)
+  isWinner?: boolean; // Flag for game over
+  isLoser?: boolean; // Flag for who dealt the winning tile
+  tai?: number; // Fan/Tai count for the result screen
 }
 
 export interface InitData {
@@ -68,6 +73,8 @@ export interface GameStateDTO {
   actionTimer: number;
   availableActions: ActionType[];
   initData?: InitData; // Optional data for STATE_INIT phase
+  winnerIndex?: number; // Index of winner
+  winType?: 'ZIMO' | 'RON' | 'DRAW';
 }
 
 export type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS' | 'RICHII';

@@ -13,6 +13,7 @@ export class MockStateStore {
   }[] = [];
   
   public dto: GameStateDTO;
+  public _timerInterval: any = null;
 
   constructor() {
     this.dto = {
@@ -28,6 +29,8 @@ export class MockStateStore {
   }
 
   initGame() {
+    if (this._timerInterval) clearInterval(this._timerInterval);
+    
     this.deck = generateDeck();
     this.players = [0, 1, 2, 3].map(i => ({
       info: {
@@ -35,13 +38,17 @@ export class MockStateStore {
         name: i === 0 ? "玩家 (您)" : MOCK_PLAYERS[i].name,
         avatar: "",
         score: i === 0 ? 2000 : MOCK_PLAYERS[i].score,
+        roundScoreDelta: 0, // Reset delta
         isDealer: false,
         flowerCount: 0,
         flowers: [], // Init empty
         wind: "",
         seatWind: "",
         isRichii: false,
-        richiiDiscardIndex: -1
+        richiiDiscardIndex: -1,
+        isWinner: false,
+        isLoser: false,
+        tai: 0
       },
       hand: [],
       discards: [],
@@ -51,6 +58,9 @@ export class MockStateStore {
     this.dto.lastDiscard = null;
     this.dto.availableActions = [];
     this.dto.initData = undefined;
+    this.dto.winnerIndex = -1;
+    this.dto.winType = undefined;
+    this.dto.actionTimer = 0;
     this.syncDto();
   }
 
@@ -86,9 +96,12 @@ export class MockStateStore {
 
   syncDto() {
     this.dto.deckCount = this.deck.length;
+    // If Game Over, reveal ALL hands. Otherwise only P0
+    const isGameOver = this.dto.state === 'STATE_GAME_OVER';
+
     this.dto.players = this.players.map((p, i) => ({
         info: p.info,
-        hand: i === 0 ? p.hand : [], // Hide opponent hands
+        hand: (i === 0 || isGameOver) ? p.hand : [], // Reveal opponent hands if Game Over
         handCount: p.hand.length,
         discards: p.discards,
         melds: p.melds

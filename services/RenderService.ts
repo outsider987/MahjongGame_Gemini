@@ -5,6 +5,7 @@ import { PlayerRenderService } from './PlayerRenderService';
 import { EffectRenderService } from './EffectRenderService';
 import { InitPhaseRenderService } from './InitPhaseRenderService';
 import { HudRenderService } from './HudRenderService';
+import { GameOverRenderService } from './GameOverRenderService';
 
 // Re-export for compatibility with consumers (like GameCanvas)
 export type { RenderMetrics, RenderContext } from './RenderTypes';
@@ -78,6 +79,11 @@ export class RenderService {
     HudRenderService.drawHud(ctx, gameState.deckCount || 0);
     
     EffectRenderService.drawEffects(ctx, gameState.effects);
+
+    // 5. GAME OVER OVERLAY
+    if (gameState.state === 'STATE_GAME_OVER') {
+        GameOverRenderService.drawGameOver(ctx, gameState);
+    }
 
     return metrics;
   }

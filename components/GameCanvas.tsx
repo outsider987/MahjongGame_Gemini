@@ -5,7 +5,8 @@ import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
 import { socketService } from '../services/SocketService';
 import { SoundService } from '../services/SoundService';
-import { Settings, X, LogOut, Volume2, VolumeX, RefreshCw, Wifi } from 'lucide-react';
+import { Settings, X, LogOut, Volume2, VolumeX, RefreshCw, Wifi, Share2, Camera, PlayCircle } from 'lucide-react';
+import { Button } from './ui/Button';
 
 declare global {
   interface Window {
@@ -64,6 +65,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
 
   // --- Socket Connection ---
   useEffect(() => {
@@ -128,6 +130,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         // Update React State
         setAvailableActions(newState.availableActions || []);
         setActivePlayerIndex(newState.turn);
+        setIsGameOver(newState.state === 'STATE_GAME_OVER');
     });
 
     socket.on("game:effect", (effectData: any) => {
@@ -257,6 +260,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       setAvailableActions([]); 
   };
 
+  const handleRestart = () => {
+      SoundService.playClick();
+      socketService.restartGame();
+  };
+
   // --- P5 Loop ---
   useEffect(() => {
     if (!window.p5) return;
@@ -323,6 +331,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       p.mousePressed = () => {
           // Ensure audio context is active on interaction
           SoundService.init();
+          
+          if (isGameOver) return; // No tile interactions on game over
 
           const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
@@ -349,6 +359,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       const updateHitTest = (p: any, scale: number) => {
           hoveredTileRef.current = -1;
           
+          if (gameRef.current.state === 'STATE_GAME_OVER') return;
+
           const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
           const isRichii = gameRef.current.players[0]?.info.isRichii;
@@ -465,7 +477,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
            )}
       </div>
 
-      {gameRef.current.players.map((pData, i) => {
+      {/* Interactive Game Over Buttons - Positioned on bottom of the canvas, overlaying the P5 drawing */}
+      {isGameOver && (
+          <div className="absolute bottom-10 left-0 right-0 z-50 flex items-center justify-center gap-4 animate-scaleIn">
+              <Button variant="secondary" className="flex items-center gap-2 text-lg px-8 py-3 shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                 <Share2 size={20} /> 分享
+              </Button>
+              <Button variant="gold" className="flex items-center gap-2 text-lg px-8 py-3 shadow-[0_0_20px_rgba(251,191,36,0.4)]">
+                 <Camera size={20} /> 保存截圖
+              </Button>
+              <Button onClick={handleRestart} variant="primary" className="flex items-center gap-2 text-lg px-10 py-3 shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+                 <PlayCircle size={20} /> 繼續
+              </Button>
+          </div>
+      )}
+
+      {/* Players */}
+      {!isGameOver && gameRef.current.players.map((pData, i) => {
           let pos: 'bottom'|'right'|'top'|'left' = 'bottom';
           if (i === 0) pos = 'bottom';
           if (i === 1) pos = 'right';
@@ -482,7 +510,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           );
       })}
 
-      {availableActions.length > 0 && (
+      {availableActions.length > 0 && !isGameOver && (
         <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
             <div className="flex gap-4 p-2 bg-black/60 backdrop-blur-xl rounded-2xl border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
                 <button 
