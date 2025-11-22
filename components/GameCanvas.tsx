@@ -1,10 +1,10 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AppView, Suit, Tile, Player } from '../types';
-import { generateDeck } from '../services/mahjongLogic';
+import { AppView, GameStateDTO, Player, Tile, ActionType, VisualEffect } from '../types';
 import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
-import { Mic, MessageCircle, Battery, Signal, ChevronLeft, Menu, Volume2, Wifi } from 'lucide-react';
+import { socketService } from '../services/SocketService';
+import { Mic, MessageCircle, Battery, Signal, ChevronLeft, Menu, Volume2, Wifi, RefreshCw } from 'lucide-react';
 import { Button } from './ui/Button';
 
 declare global {
@@ -17,232 +17,88 @@ interface GameCanvasProps {
   setView: (view: AppView) => void;
 }
 
-type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU';
-
-interface Meld {
-  type: ActionType;
-  tiles: Tile[];
-  fromPlayer: number; 
-}
-
-// --- FX System Types ---
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
-  size: number;
-}
-
-interface VisualEffect {
-  id: number;
-  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES';
-  text?: string;
-  x?: number;
-  y?: number;
-  life: number;
-  particles?: Particle[];
-}
-
-// --- Game Logic Interfaces ---
-interface GameState {
-  deck: Tile[];
-  players: {
-    info: Player;
-    hand: Tile[];
-    discards: Tile[];
-    melds: Meld[];
-  }[];
-  turn: number;
-  state: 'DRAW' | 'THINKING' | 'DISCARD' | 'INTERRUPT' | 'RESOLVE';
-  lastDiscard: { tile: Tile, playerIndex: number } | null;
-  actionTimer: number;
-  effects: VisualEffect[];
-}
-
-const INITIAL_PLAYERS: Player[] = [
-  { id: 0, name: 'Ming', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ming', score: 2400, isDealer: true, flowerCount: 1, wind: '南', seatWind: '南' },
-  { id: 1, name: '佑賢', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix', score: -300, isDealer: false, flowerCount: 1, wind: '西', seatWind: '西' },
-  { id: 2, name: '上家', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Granny', score: -2400, isDealer: false, flowerCount: 3, wind: '北', seatWind: '北' },
-  { id: 3, name: '初鹿牧...', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo', score: 300, isDealer: false, flowerCount: 1, wind: '東', seatWind: '東' },
-];
-
-// --- Helper Component: Player HUD ---
-interface PlayerCardProps {
-  player: Player;
-  position: 'bottom' | 'right' | 'top' | 'left';
-  isActive: boolean;
-  isSelf?: boolean;
-}
-
-const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isSelf = false }) => {
-  const getPositionClasses = () => {
-    switch(position) {
-      case 'bottom': return "bottom-6 left-6 flex-row items-end";
-      case 'right': return "right-4 top-1/2 -translate-y-1/2 flex-col items-end";
-      case 'top': return "top-4 left-1/2 -translate-x-1/2 flex-col items-center"; 
-      case 'left': return "left-4 top-1/2 -translate-y-1/2 flex-col items-start";
-      default: return "";
-    }
-  };
-
-  return (
-    <div className={`absolute ${getPositionClasses()} flex gap-3 pointer-events-auto transition-all duration-300 ${isActive ? 'opacity-100 scale-105' : 'opacity-80 scale-100'}`}>
-      <div className={`relative group ${isSelf ? 'order-1' : ''}`}>
-        {isActive && (
-          <div className="absolute -inset-2 bg-yellow-500/30 rounded-full blur-md animate-pulse"></div>
-        )}
-        <div className={`relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden border-2 shadow-lg z-10 bg-[#1a1a1a] ${isActive ? 'border-yellow-400' : 'border-gray-600'}`}>
-          <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" />
-        </div>
-        {player.isDealer && (
-          <div className="absolute -top-1 -right-1 z-20 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center border border-white shadow-sm">
-             <span className="text-white text-[10px] font-serif font-bold">莊</span>
-          </div>
-        )}
-      </div>
-
-      <div className={`flex flex-col ${isSelf ? 'items-start order-2 mb-2' : (position === 'right' ? 'items-end mr-1' : (position === 'left' ? 'items-start ml-1' : 'items-center'))} z-0`}>
-         <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 shadow-lg">
-            <div className="text-white text-xs md:text-sm font-bold tracking-wide flex items-center gap-2">
-               {player.name}
-            </div>
-            <div className={`text-xs font-mono font-bold mt-0.5 ${player.score >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-               {player.score > 0 ? '+' : ''}{player.score}
-            </div>
-         </div>
-         <div className="mt-1 flex gap-1">
-            {[...Array(player.flowerCount)].map((_, i) => (
-                <span key={i} className="text-[10px]">🌸</span>
-            ))}
-         </div>
-      </div>
-    </div>
-  );
+// Mock Initial State for rendering before connection or if connection fails
+const INITIAL_MOCK_STATE: GameStateDTO = {
+    deckCount: 144,
+    players: [
+        { info: { id: 0, name: "連線中...", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "東", seatWind: "東" }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 1, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "南", seatWind: "南" }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 2, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "西", seatWind: "西" }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 3, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "北", seatWind: "北" }, hand: [], handCount: 16, discards: [], melds: [] },
+    ],
+    turn: 0,
+    state: 'WAIT_CONNECTION',
+    lastDiscard: null,
+    actionTimer: 0,
+    availableActions: []
 };
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const renderRef = useRef<HTMLDivElement>(null);
   const p5Ref = useRef<any>(null);
   
-  // Mutable Game State
-  const gameRef = useRef<GameState>({
-    deck: [],
-    players: [],
-    turn: 0,
-    state: 'DRAW',
-    lastDiscard: null,
-    actionTimer: 0,
-    effects: []
-  });
+  // Game State is now fully controlled by backend events
+  const gameRef = useRef<GameStateDTO>(INITIAL_MOCK_STATE);
+  const effectsRef = useRef<VisualEffect[]>([]); // Effects are transient, handled locally for animation
   
-  // Interaction State (Hit Test)
+  // Interaction State
   const hitTestMetrics = useRef<RenderMetrics>({ p0HandStartX: 0, p0TileW: 0 });
   const hoveredTileRef = useRef<number>(-1);
 
+  // UI State (React managed)
   const [activePlayerIndex, setActivePlayerIndex] = useState(0);
-  const [uiPlayers, setUiPlayers] = useState<Player[]>(INITIAL_PLAYERS);
-  const [isMuted, setIsMuted] = useState(false);
   const [availableActions, setAvailableActions] = useState<ActionType[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
-  // --- Logic Helpers (Ideally moved to GameLogic.ts in future steps) ---
-  
-  const countTiles = (hand: Tile[], suit: Suit, value: number) => {
-      return hand.filter(t => t.suit === suit && t.value === value).length;
-  };
+  // --- Socket Connection ---
+  useEffect(() => {
+    const socket = socketService.connect("http://localhost:8080");
+    
+    socket.on("connect", () => {
+        setIsConnected(true);
+        socketService.joinRoom("room_101");
+    });
 
-  const checkHumanActions = (discardedTile: Tile) => {
-      const hand = gameRef.current.players[0].hand;
-      const actions: ActionType[] = [];
-      const count = countTiles(hand, discardedTile.suit, discardedTile.value);
-      if (count >= 2) actions.push('PONG');
-      if (count === 3) actions.push('KONG');
-      if (count >= 1 && Math.random() > 0.95) actions.push('HU');
-      if (gameRef.current.deck.length < 130 && actions.length === 0 && Math.random() > 0.8) {
-          actions.push('PONG');
-      }
-      return actions;
-  };
+    socket.on("disconnect", () => setIsConnected(false));
 
-  const checkForAiAction = (game: GameState, discardedTile: Tile, fromPlayer: number) => {
-      for (let offset = 1; offset < 4; offset++) {
-          const pIdx = (fromPlayer + offset) % 4;
-          if (pIdx === 0) continue; 
-          
-          const player = game.players[pIdx];
-          const c = countTiles(player.hand, discardedTile.suit, discardedTile.value);
-          
-          if (c >= 2 && Math.random() < 0.5) return { type: 'PONG' as ActionType, playerIdx: pIdx };
-          if (c === 3 && Math.random() < 0.7) return { type: 'KONG' as ActionType, playerIdx: pIdx };
-      }
-      if (Math.random() < 0.05 && fromPlayer !== 0) {
-         const nextAI = (fromPlayer + 1) % 4;
-         if (nextAI !== 0) return { type: 'PONG' as ActionType, playerIdx: nextAI };
-      }
-      return null;
-  };
+    socket.on("game:state", (newState: GameStateDTO) => {
+        // Update Ref for p5 loop
+        gameRef.current = newState;
+        // Update React State for UI Overlay
+        setAvailableActions(newState.availableActions || []);
+        setActivePlayerIndex(newState.turn);
+    });
 
-  const executeAction = (game: GameState, playerIdx: number, action: ActionType, tile: Tile, fromIdx: number) => {
-      const player = game.players[playerIdx];
-      const toRemove = action === 'PONG' ? 2 : 3;
-      let removedCount = 0;
-      player.hand = player.hand.filter(t => {
-          if (removedCount < toRemove && t.suit === tile.suit && t.value === tile.value) {
-              removedCount++;
-              return false;
-          }
-          return true;
-      });
+    socket.on("game:effect", (effectData: any) => {
+        triggerEffect(effectData.type, effectData.text, effectData.position?.x, effectData.position?.y);
+    });
 
-      if (removedCount < toRemove) {
-         for(let i=0; i<(toRemove - removedCount); i++) player.hand.pop();
-      }
+    return () => {
+        socket.off("connect");
+        socket.off("disconnect");
+        socket.off("game:state");
+        socket.off("game:effect");
+        socketService.disconnect();
+    };
+  }, []);
 
-      const meldTiles = Array(action === 'KONG' ? 4 : 3).fill(tile);
-      player.melds.push({ type: action, tiles: meldTiles, fromPlayer: fromIdx });
-      game.players[fromIdx].discards.pop();
 
-      game.turn = playerIdx;
-      game.state = 'DISCARD';
-      game.actionTimer = 60; 
-      
-      const fxX = playerIdx === 1 ? window.innerWidth - 150 : (playerIdx === 2 ? window.innerWidth/2 : 150);
-      const fxY = playerIdx === 1 ? window.innerHeight/2 : (playerIdx === 2 ? 150 : window.innerHeight/2);
-      
-      triggerEffect(game, 'TEXT', action === 'PONG' ? '碰' : '槓', fxX, fxY);
-      if (action === 'HU') triggerEffect(game, 'LIGHTNING', '胡', fxX, fxY);
-      triggerEffect(game, 'PARTICLES', undefined, fxX, fxY);
-  };
-
-  const handlePlayerAction = (action: ActionType | 'PASS') => {
-      setAvailableActions([]);
-      const game = gameRef.current;
-      const tile = game.lastDiscard?.tile;
-      if (action === 'PASS' || !tile) {
-          const nextPlayer = (game.lastDiscard!.playerIndex + 1) % 4;
-          game.turn = nextPlayer;
-          game.state = 'DRAW';
-          return;
-      }
-      executeAction(game, 0, action, tile, game.lastDiscard!.playerIndex);
-  };
-  
-  const triggerEffect = (game: GameState, type: 'TEXT' | 'LIGHTNING' | 'PARTICLES', text?: string, x?: number, y?: number) => {
-      game.effects.push({
+  // --- Effect System ---
+  const triggerEffect = (type: 'TEXT' | 'LIGHTNING' | 'PARTICLES', text?: string, x?: number, y?: number) => {
+      effectsRef.current.push({
           id: Date.now() + Math.random(),
           type,
           text,
-          x: x || 0,
-          y: y || 0,
+          x: x || window.innerWidth / 2,
+          y: y || window.innerHeight / 2,
           life: type === 'LIGHTNING' ? 25 : 50,
-          particles: type === 'PARTICLES' ? createParticles(x || 0, y || 0) : undefined
+          particles: type === 'PARTICLES' ? createParticles(x || window.innerWidth/2, y || window.innerHeight/2) : undefined
       });
   };
 
-  const createParticles = (x: number, y: number): Particle[] => {
-      const pArr: Particle[] = [];
+  const createParticles = (x: number, y: number) => {
+      const pArr = [];
       for(let i=0; i<25; i++) {
           pArr.push({
               x, y,
@@ -256,158 +112,80 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       return pArr;
   };
 
-  const handleDiscard = (playerIdx: number, tileIdx: number) => {
-      const game = gameRef.current;
-      const player = game.players[playerIdx];
-      if (!player.hand[tileIdx]) return;
-
-      const discardedTile = player.hand.splice(tileIdx, 1)[0];
-      player.discards.push(discardedTile);
-      player.hand.sort((a,b) => a.value - b.value); 
-
-      game.lastDiscard = { tile: discardedTile, playerIndex: playerIdx };
-      
-      if (playerIdx !== 0) {
-          const actions = checkHumanActions(discardedTile);
-          if (actions.length > 0) {
-              setAvailableActions(actions);
-              game.state = 'INTERRUPT';
-              game.actionTimer = 300;
-              return;
-          }
-      }
-
-      const aiAction = checkForAiAction(game, discardedTile, playerIdx);
-      if (aiAction) {
-         executeAction(game, aiAction.playerIdx, aiAction.type, discardedTile, playerIdx);
-         return;
-      }
-      
-      game.state = 'INTERRUPT'; 
-      game.actionTimer = 10; 
+  // --- Interaction Handlers ---
+  const handleDiscard = (tileIndex: number) => {
+      // Optimistic UI update could go here, but for MJ exact state is critical
+      // So we just send signal
+      socketService.sendDiscard(tileIndex);
   };
 
-  // --- P5 Controller Integration ---
+  const handlePlayerAction = (action: ActionType) => {
+      socketService.sendAction(action);
+      setAvailableActions([]); // Clear immediately to prevent double click
+  };
+
+  // --- P5 Loop ---
   useEffect(() => {
     if (!window.p5) return;
 
     const sketch = (p: any) => {
       let globalScale = 1;
 
-      p.preload = () => {
-         // Now we generate assets locally instead of loading them
-         // This uses p5.createGraphics so it's synchronous but heavy, 
-         // usually safe in preload or setup.
-      };
-
       p.setup = () => {
         const canvas = p.createCanvas(window.innerWidth, window.innerHeight);
         canvas.parent(renderRef.current!);
         p.frameRate(30);
         p.textFont("'Noto Serif TC', 'Roboto', serif");
-        
-        // GENERATE ASSETS LOCALLY
         AssetLoader.generateAll(p);
-        
-        startNewGame();
       };
 
       p.windowResized = () => {
         p.resizeCanvas(window.innerWidth, window.innerHeight);
       };
 
-      const startNewGame = () => {
-        const deck = generateDeck();
-        const players = INITIAL_PLAYERS.map((info, idx) => {
-            const count = 16; 
-            const hand = deck.splice(0, count).sort((a,b) => a.value - b.value);
-            return { info, hand, discards: [], melds: [] };
-        });
-
-        gameRef.current = {
-          deck, players, turn: 0, state: 'DRAW', lastDiscard: null, actionTimer: 0, effects: []
-        };
-        setAvailableActions([]);
-      };
-
       p.draw = () => {
         globalScale = Math.min(1.2, Math.max(0.6, p.width / 1280));
         
-        // --- S: Call Render Service ---
-        // Returns metrics needed for Input Handling
+        // Merge GameState (Backend) + Effects (Frontend Animation) for rendering
+        const renderState = {
+            ...gameRef.current,
+            effects: effectsRef.current
+        };
+
+        // Draw
         hitTestMetrics.current = RenderService.drawScene(
           p, 
-          gameRef.current, 
+          renderState, 
           globalScale, 
           hoveredTileRef.current
         );
 
-        // Update Logic Phase
-        updateGameLogic();
-        
-        // Update Input Phase
+        // Input Logic
         updateHitTest(p, globalScale);
-
-        // Sync UI State rarely (optimization)
-        if (p.frameCount % 15 === 0) {
-           setActivePlayerIndex(gameRef.current.turn);
-        }
-      };
-
-      const updateGameLogic = () => {
-          const game = gameRef.current;
-          
-          if (game.state === 'DRAW') {
-             if (game.deck.length === 0) return;
-             const currentPlayer = game.players[game.turn];
-             if (currentPlayer.hand.length % 3 === 1) { 
-                 const newTile = game.deck.pop();
-                 if (newTile) currentPlayer.hand.push(newTile);
-             }
-             game.state = 'THINKING';
-             game.actionTimer = 15; 
-          }
-          else if (game.state === 'THINKING') {
-              if (game.actionTimer > 0) { game.actionTimer--; return; }
-              game.state = 'DISCARD';
-              game.actionTimer = 300; 
-          }
-          else if (game.state === 'DISCARD') {
-              if (game.actionTimer > 0) game.actionTimer--;
-              if (game.actionTimer <= 0) {
-                  const currentHand = game.players[game.turn].hand;
-                  handleDiscard(game.turn, currentHand.length - 1);
-                  return;
-              }
-              if (game.turn !== 0 && game.actionTimer === 280) {
-                  const hand = game.players[game.turn].hand;
-                  handleDiscard(game.turn, Math.floor(Math.random() * hand.length));
-              }
-          }
-          else if (game.state === 'INTERRUPT') {
-              if (game.actionTimer > 0) game.actionTimer--;
-              if (game.actionTimer <= 0 && availableActions.length === 0) {
-                  const nextPlayer = (game.lastDiscard!.playerIndex + 1) % 4;
-                  game.turn = nextPlayer;
-                  game.state = 'DRAW';
-              }
-          }
       };
 
       const updateHitTest = (p: any, scale: number) => {
           hoveredTileRef.current = -1;
+          
+          // Only allow interaction if it's my turn and state is DISCARD
+          // (In a real app, verify player ID matches self)
+          const isMyTurn = gameRef.current.turn === 0; // Assuming P0 is always self in view
+          const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
+
+          if (!isMyTurn || !canDiscard) return;
+
           const mX = p.mouseX;
           const mY = p.mouseY;
           const handY = p.height - (130 * scale);
           
-          // Get metrics from RenderService results
           const { p0HandStartX, p0TileW } = hitTestMetrics.current;
 
           if (mY > handY - 60 && mY < handY + 60) {
               if (p0HandStartX !== 0) {
                   const relativeX = mX - p0HandStartX;
                   if (relativeX >= 0) {
-                      const p0HandLen = gameRef.current.players[0].hand.length;
+                      const hand = gameRef.current.players[0].hand;
+                      const p0HandLen = hand.length;
                       const isNewTileState = p0HandLen % 3 === 2;
                       const effectiveW = p0TileW || 44;
                       const normalWidth = (isNewTileState ? p0HandLen - 1 : p0HandLen) * effectiveW;
@@ -421,12 +199,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                   }
               }
           }
+
           if (p.mouseIsPressed && hoveredTileRef.current !== -1) {
-              if (gameRef.current.state === 'DISCARD' && gameRef.current.turn === 0) {
-                  if (p.frameCount % 10 === 0) {
-                      handleDiscard(0, hoveredTileRef.current);
-                  }
-              }
+               // Debounce slightly
+               if (p.frameCount % 10 === 0) {
+                   handleDiscard(hoveredTileRef.current);
+                   hoveredTileRef.current = -1; // Reset
+               }
           }
       };
     };
@@ -439,10 +218,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     };
   }, []);
 
-  const activePlayer = uiPlayers[activePlayerIndex];
+  const activePlayer = gameRef.current.players[activePlayerIndex]?.info || INITIAL_MOCK_STATE.players[0].info;
 
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef}>
+      {/* Top Bar */}
       <div className="absolute top-0 w-full h-12 bg-black/40 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 z-20">
           <div className="flex items-center gap-4">
             <Button variant="secondary" className="px-2 py-1 text-xs flex items-center gap-1" onClick={() => setView(AppView.LOBBY)}>
@@ -450,11 +230,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
             </Button>
             <div className="flex items-center gap-2 text-yellow-500 text-sm font-bold">
                 <span className="bg-yellow-500/20 px-2 py-0.5 rounded">房號 80440</span>
+                <span className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {isConnected ? '連線正常' : '斷線重連中...'}
+                </span>
             </div>
           </div>
           <div className="flex items-center gap-3 text-gray-400">
-              <Wifi size={16} className="text-green-500"/>
-              <Battery size={16} className="text-white"/>
+               <button onClick={() => socketService.restartGame()} title="重啟遊戲">
+                  <RefreshCw size={16} className="hover:text-white" />
+               </button>
+              <Wifi size={16} className={isConnected ? "text-green-500" : "text-red-500"}/>
               <div className="h-4 w-[1px] bg-gray-600 mx-1"></div>
               <button onClick={() => setIsMuted(!isMuted)}>
                  {isMuted ? <Volume2 size={18} className="text-red-500"/> : <Volume2 size={18} />}
@@ -463,7 +248,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           </div>
       </div>
 
-      {uiPlayers.map((p, i) => {
+      {/* Players Overlay */}
+      {gameRef.current.players.map((pData, i) => {
           let pos: 'bottom'|'right'|'top'|'left' = 'bottom';
           if (i === 0) pos = 'bottom';
           if (i === 1) pos = 'right';
@@ -471,8 +257,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           if (i === 3) pos = 'left';
           return (
             <PlayerCard 
-                key={p.id} 
-                player={p} 
+                key={i} 
+                player={pData.info} 
                 position={pos} 
                 isActive={activePlayerIndex === i} 
                 isSelf={i === 0}
@@ -480,6 +266,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           );
       })}
 
+      {/* Action Buttons Overlay */}
       {availableActions.length > 0 && (
         <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
             <div className="flex gap-4 p-2 bg-black/60 backdrop-blur-xl rounded-2xl border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
@@ -489,42 +276,69 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                 >
                     過
                 </button>
-
                 {availableActions.includes('CHOW') && (
-                   <button 
-                     onClick={() => handlePlayerAction('CHOW')}
-                     className="w-20 h-20 rounded-full bg-gradient-to-br from-green-600 to-emerald-800 border-4 border-green-400 text-white font-black text-3xl shadow-xl transition-transform hover:scale-110"
-                   >
-                     吃
-                   </button>
+                   <button onClick={() => handlePlayerAction('CHOW')} className="w-20 h-20 bg-green-600 text-white font-black text-3xl rounded-full border-4 border-green-400 hover:scale-110 transition-transform">吃</button>
                 )}
                 {availableActions.includes('PONG') && (
-                   <button 
-                     onClick={() => handlePlayerAction('PONG')}
-                     className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-indigo-800 border-4 border-blue-400 text-white font-black text-3xl shadow-xl transition-transform hover:scale-110"
-                   >
-                     碰
-                   </button>
+                   <button onClick={() => handlePlayerAction('PONG')} className="w-20 h-20 bg-blue-600 text-white font-black text-3xl rounded-full border-4 border-blue-400 hover:scale-110 transition-transform">碰</button>
                 )}
                 {availableActions.includes('KONG') && (
-                   <button 
-                     onClick={() => handlePlayerAction('KONG')}
-                     className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-600 to-fuchsia-800 border-4 border-purple-400 text-white font-black text-3xl shadow-xl transition-transform hover:scale-110"
-                   >
-                     槓
-                   </button>
+                   <button onClick={() => handlePlayerAction('KONG')} className="w-20 h-20 bg-purple-600 text-white font-black text-3xl rounded-full border-4 border-purple-400 hover:scale-110 transition-transform">槓</button>
                 )}
                 {availableActions.includes('HU') && (
-                   <button 
-                     onClick={() => handlePlayerAction('HU')}
-                     className="w-24 h-24 -mt-4 rounded-full bg-gradient-to-br from-red-500 to-red-900 border-4 border-yellow-400 text-yellow-100 font-black text-5xl shadow-[0_0_30px_rgba(220,38,38,0.8)] animate-pulse transition-transform hover:scale-110"
-                   >
-                     胡
-                   </button>
+                   <button onClick={() => handlePlayerAction('HU')} className="w-24 h-24 -mt-4 bg-red-600 text-yellow-100 font-black text-5xl rounded-full border-4 border-yellow-400 hover:scale-110 transition-transform animate-pulse shadow-[0_0_30px_rgba(220,38,38,0.8)]">胡</button>
                 )}
             </div>
         </div>
       )}
+      
+      {/* Connection Notice if not connected */}
+      {!isConnected && (
+          <div className="absolute inset-0 z-40 bg-black/50 flex items-center justify-center">
+              <div className="bg-gray-900 p-6 rounded-xl border border-red-500 text-center">
+                  <h2 className="text-red-500 text-xl font-bold mb-2">無法連線至後端伺服器</h2>
+                  <p className="text-gray-300 text-sm mb-4">請確認您的 Go 後端服務已在 Port 8080 啟動。</p>
+                  <p className="text-gray-500 text-xs font-mono">SocketService: connecting to localhost:8080...</p>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+};
+
+// (Keeping PlayerCard component same as before, included inline here for completeness if needed, but using existing is fine)
+interface PlayerCardProps {
+  player: Player;
+  position: 'bottom' | 'right' | 'top' | 'left';
+  isActive: boolean;
+  isSelf?: boolean;
+}
+const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isSelf = false }) => {
+  const getPositionClasses = () => {
+    switch(position) {
+      case 'bottom': return "bottom-6 left-6 flex-row items-end";
+      case 'right': return "right-4 top-1/2 -translate-y-1/2 flex-col items-end";
+      case 'top': return "top-4 left-1/2 -translate-x-1/2 flex-col items-center"; 
+      case 'left': return "left-4 top-1/2 -translate-y-1/2 flex-col items-start";
+      default: return "";
+    }
+  };
+  return (
+    <div className={`absolute ${getPositionClasses()} flex gap-3 pointer-events-auto transition-all duration-300 ${isActive ? 'opacity-100 scale-105' : 'opacity-80 scale-100'}`}>
+      <div className={`relative group ${isSelf ? 'order-1' : ''}`}>
+        {isActive && <div className="absolute -inset-2 bg-yellow-500/30 rounded-full blur-md animate-pulse"></div>}
+        <div className={`relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden border-2 shadow-lg z-10 bg-[#1a1a1a] ${isActive ? 'border-yellow-400' : 'border-gray-600'}`}>
+          <img src={player.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + player.id} alt={player.name} className="w-full h-full object-cover" />
+        </div>
+        {player.isDealer && <div className="absolute -top-1 -right-1 z-20 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center border border-white shadow-sm"><span className="text-white text-[10px] font-serif font-bold">莊</span></div>}
+      </div>
+      <div className={`flex flex-col ${isSelf ? 'items-start order-2 mb-2' : (position === 'right' ? 'items-end mr-1' : (position === 'left' ? 'items-start ml-1' : 'items-center'))} z-0`}>
+         <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 shadow-lg">
+            <div className="text-white text-xs md:text-sm font-bold tracking-wide flex items-center gap-2">{player.name}</div>
+            <div className={`text-xs font-mono font-bold mt-0.5 ${player.score >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{player.score > 0 ? '+' : ''}{player.score}</div>
+         </div>
+         <div className="mt-1 flex gap-1">{[...Array(player.flowerCount)].map((_, i) => (<span key={i} className="text-[10px]">🌸</span>))}</div>
+      </div>
     </div>
   );
 };

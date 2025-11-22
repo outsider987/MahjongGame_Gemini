@@ -4,10 +4,11 @@ export enum AppView {
   GAME = 'GAME',
 }
 
-export enum GameState {
+export enum GameStateEnum {
   INIT = 'STATE_INIT',
+  DRAW = 'STATE_DRAW',
+  WAIT_DISCARD = 'STATE_WAIT_DISCARD',
   CHECK_FLOWERS = 'STATE_CHECK_FLOWERS',
-  PLAYER_TURN = 'STATE_PLAYER_TURN',
   INTERRUPT_CHECK = 'STATE_INTERRUPT_CHECK',
   RESOLVE_ACTION = 'STATE_RESOLVE_ACTION',
   GAME_OVER = 'STATE_GAME_OVER',
@@ -25,7 +26,7 @@ export enum Suit {
 export interface Tile {
   id: string;
   suit: Suit;
-  value: number; // 1-9 for suits, 1-4 for winds, 1-3 for dragons
+  value: number; 
   isFlower: boolean;
 }
 
@@ -34,21 +35,50 @@ export interface Player {
   name: string;
   avatar: string;
   score: number;
-  isDealer: boolean; // 莊家
+  isDealer: boolean; 
   flowerCount: number;
-  wind: '東' | '南' | '西' | '北';
-  seatWind: '東' | '南' | '西' | '北'; // The wind position relative to the round (e.g., 南風北)
+  wind: string;
+  seatWind: string;
+}
+
+// Data Transfer Object for Game State (matched with Go backend)
+export interface GameStateDTO {
+  deckCount: number;
+  players: {
+    info: Player;
+    hand: Tile[];       // Only populated for self, or revealed hands
+    handCount: number;  // Used for rendering opponents
+    discards: Tile[];
+    melds: Meld[];
+  }[];
+  turn: number;
+  state: string; // 'DRAW' | 'THINKING' | 'DISCARD' | ...
+  lastDiscard: { tile: Tile, playerIndex: number } | null;
+  actionTimer: number;
+  availableActions: ActionType[];
+}
+
+export type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS';
+
+export interface Meld {
+  type: ActionType;
+  tiles: Tile[];
+  fromPlayer: number; 
 }
 
 export interface RoomSettings {
-  baseScore: number; // 底
-  taiScore: number; // 台
-  rounds: number; // 圈數
+  baseScore: number; 
+  taiScore: number; 
+  rounds: number; 
   paymentType: 'AA' | 'CLUB';
 }
 
-export interface EffectEvent {
-  type: 'LIGHTNING' | 'TEXT_BURST' | 'PARTICLES';
+export interface VisualEffect {
+  id: number;
+  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES';
   text?: string;
-  position?: { x: number; y: number };
+  x?: number;
+  y?: number;
+  life: number;
+  particles?: any[];
 }

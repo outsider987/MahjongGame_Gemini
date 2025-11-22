@@ -27,6 +27,11 @@ export class RenderService {
     hoveredTileIndex: number
   ): RenderMetrics {
     
+    // Defensive Check: If gameState is not ready, return safe defaults
+    if (!gameState || !gameState.players) {
+        return { p0HandStartX: 0, p0TileW: 0 };
+    }
+
     const ctx: RenderContext = {
       p,
       globalScale,
@@ -37,7 +42,8 @@ export class RenderService {
 
     // 1. Background
     this.drawTable(ctx);
-    this.drawTableInfo(ctx, gameState.deck.length);
+    // Use deckCount instead of deck.length
+    this.drawTableInfo(ctx, gameState.deckCount || 0);
 
     // 2. Players & Discards (Painter's Algorithm: Top/Sides first, Bottom last)
     const renderOrder = [2, 1, 3, 0]; // Top, Right, Left, Self
@@ -45,6 +51,8 @@ export class RenderService {
 
     renderOrder.forEach(i => {
       const player = gameState.players[i];
+      if (!player) return;
+
       const isActive = (i === gameState.turn);
       
       // Draw Player Hand & Melds
@@ -115,7 +123,7 @@ export class RenderService {
     p.rectMode(p.CENTER);
     p.rect(0, 0, boxSize, boxSize, 20);
     
-    const timeLeft = Math.ceil(game.actionTimer / 30);
+    const timeLeft = Math.ceil((game.actionTimer || 0) / 30);
     const isInterrupt = game.state === 'INTERRUPT';
     
     p.noStroke();
@@ -180,14 +188,20 @@ export class RenderService {
      const SIDE_MARGIN_BOTTOM = 150 * s; // Slightly adjusted
      const BOTTOM_Y = BASE_BOTTOM_OFFSET * s;
 
-     const handLen = player.hand.length;
-     const hasNew = handLen % 3 === 2;
+     // Safety check for player.hand being undefined
+     const hand = player.hand || [];
+     const handLen = hand.length;
+     
+     // If hand is hidden (other players), use handCount
+     const visualHandCount = index === 0 ? handLen : (player.handCount || 0);
+     const hasNew = visualHandCount % 3 === 2;
      
      const tileWidthInHand = (index === 1 || index === 3) ? SIDE_TILE_W : TILE_W;
-     const handSizePx = (handLen * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
+     const handSizePx = (visualHandCount * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
      
-     const meldSizePx = player.melds.reduce((acc: number, m: any) => {
-        return acc + (m.tiles.length * MELD_W) + MELD_GAP;
+     const melds = player.melds || [];
+     const meldSizePx = melds.reduce((acc: number, m: any) => {
+        return acc + ((m?.tiles?.length || 0) * MELD_W) + MELD_GAP;
      }, 0);
      
      const totalSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
@@ -206,11 +220,11 @@ export class RenderService {
          if (endX > limitX) startX = limitX - totalSize;
          if (startX < 20 * s) startX = 20 * s;
 
-         this.drawHandSequence(ctx, player.hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE);
+         this.drawHandSequence(ctx, hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE);
          
-         if (player.melds.length > 0) {
+         if (melds.length > 0) {
             const meldStartX = startX + handSizePx + GAP_HAND_MELD;
-            this.drawMelds(ctx, player.melds, meldStartX, 0, MELD_W, MELD_H, 1, MELD_GAP);
+            this.drawMelds(ctx, melds, meldStartX, 0, MELD_W, MELD_H, 1, MELD_GAP);
          }
 
          p0StartX = startX;
@@ -225,11 +239,13 @@ export class RenderService {
          const limitY = height - SIDE_MARGIN_BOTTOM;
          if (endY > limitY) startY = limitY - totalSize;
 
-         this.drawHandSequence(ctx, player.hand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 1, GAP_NEW_TILE);
+         // Draw dummy hand for opponents
+         const dummyHand = Array(visualHandCount).fill(null);
+         this.drawHandSequence(ctx, dummyHand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 1, GAP_NEW_TILE);
          
-         if (player.melds.length > 0) {
+         if (melds.length > 0) {
              const meldStartY = startY + handSizePx + GAP_HAND_MELD;
-             this.drawMelds(ctx, player.melds, meldStartY, 0, MELD_W, MELD_H, 1, MELD_GAP);
+             this.drawMelds(ctx, melds, meldStartY, 0, MELD_W, MELD_H, 1, MELD_GAP);
          }
          
      } else if (index === 2) {
@@ -238,11 +254,12 @@ export class RenderService {
          p.rotate(p.PI);
          const startX = (width - totalSize) / 2;
          
-         this.drawHandSequence(ctx, player.hand, startX, 0, TILE_W, TILE_H, 1, 'BACK_STANDING', hasNew, 2, GAP_NEW_TILE);
+         const dummyHand = Array(visualHandCount).fill(null);
+         this.drawHandSequence(ctx, dummyHand, startX, 0, TILE_W, TILE_H, 1, 'BACK_STANDING', hasNew, 2, GAP_NEW_TILE);
          
-         if (player.melds.length > 0) {
+         if (melds.length > 0) {
              const meldStartX = startX + handSizePx + GAP_HAND_MELD;
-             this.drawMelds(ctx, player.melds, meldStartX, 0, MELD_W, MELD_H, 1, MELD_GAP);
+             this.drawMelds(ctx, melds, meldStartX, 0, MELD_W, MELD_H, 1, MELD_GAP);
          }
 
      } else if (index === 3) {
@@ -255,11 +272,12 @@ export class RenderService {
          const limitY = height - SIDE_MARGIN_BOTTOM;
          if (endY > limitY) startY = limitY - totalSize;
 
-         this.drawHandSequence(ctx, player.hand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 3, GAP_NEW_TILE);
+         const dummyHand = Array(visualHandCount).fill(null);
+         this.drawHandSequence(ctx, dummyHand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 3, GAP_NEW_TILE);
          
-         if (player.melds.length > 0) {
+         if (melds.length > 0) {
              const meldStartY = startY + handSizePx + GAP_HAND_MELD;
-             this.drawMelds(ctx, player.melds, meldStartY, 0, MELD_W, MELD_H, 1, MELD_GAP);
+             this.drawMelds(ctx, melds, meldStartY, 0, MELD_W, MELD_H, 1, MELD_GAP);
          }
      }
      p.pop();
@@ -296,7 +314,7 @@ export class RenderService {
       const { p, globalScale } = ctx;
       let cx = startX;
       melds.forEach(meld => {
-         const count = meld.tiles.length;
+         const count = meld?.tiles?.length || 0;
          for(let i=0; i<count; i++) {
              const drawX = dir === 1 ? cx : cx - w;
              // Align bottom
@@ -308,7 +326,7 @@ export class RenderService {
   }
 
   private static drawDiscards(ctx: RenderContext, player: any, index: number) {
-      const tiles = player.discards;
+      const tiles = player.discards || [];
       if (tiles.length === 0) return;
       
       const { p, width, height, globalScale } = ctx;
@@ -442,6 +460,8 @@ export class RenderService {
 
   private static drawEffects(ctx: RenderContext, effects: any[]) {
       const { p, globalScale } = ctx;
+      if (!effects) return;
+      
       for (let i = effects.length - 1; i >= 0; i--) {
           const fx = effects[i];
           fx.life--;
