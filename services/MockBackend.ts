@@ -122,10 +122,10 @@ export class MockBackend {
         name: i === 0 ? "玩家 (您)" : MOCK_PLAYERS[i].name,
         avatar: "",
         score: i === 0 ? 2000 : MOCK_PLAYERS[i].score,
-        isDealer: i === 0,
+        isDealer: false, // Set after wind reveal
         flowerCount: 0,
-        wind: ["東", "南", "西", "北"][i],
-        seatWind: ["東", "南", "西", "北"][i]
+        wind: "", // Set after wind reveal
+        seatWind: "" 
       },
       hand: [],
       discards: [],
@@ -140,7 +140,7 @@ export class MockBackend {
     // Step 1: Waiting (Start)
     this.state.initData = { step: 'WAITING', diceValues: [], windAssignment: {} };
     this.broadcastState();
-    this.socket.trigger('game:effect', { type: 'TEXT', text: '準備抓位' });
+    // this.socket.trigger('game:effect', { type: 'TEXT', text: '準備抓位' });
 
     // Step 2: Dice Roll (After 1s)
     this.initTimeouts.push(setTimeout(() => {
@@ -166,17 +166,34 @@ export class MockBackend {
 
             // Step 4: Reveal Winds (After 2s)
             this.initTimeouts.push(setTimeout(() => {
-                // Assign standard positions: P0=East, P1=South...
-                const winds: Record<string, string> = { 
-                    "0": 'EAST', "1": 'SOUTH', "2": 'WEST', "3": 'NORTH' 
-                };
+                // Generate 4 winds (1=East, 2=South, 3=West, 4=North)
+                const winds = [1, 2, 3, 4];
+                // Fisher-Yates shuffle
+                for (let i = winds.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [winds[i], winds[j]] = [winds[j], winds[i]];
+                }
+
+                const assignment: Record<string, number> = {};
+                const windNames = ["", "東", "南", "西", "北"];
+
+                // Assign winds to players
+                this.players.forEach((p, idx) => {
+                    const windVal = winds[idx];
+                    assignment[String(idx)] = windVal;
+                    
+                    p.info.wind = windNames[windVal];
+                    // East is Dealer
+                    p.info.isDealer = (windVal === 1);
+                });
                 
                 this.state.initData = { 
                     step: 'REVEAL', 
                     diceValues: [d1, d2], 
-                    windAssignment: winds 
+                    windAssignment: assignment 
                 };
                 this.broadcastState();
+                this.socket.trigger('game:effect', { type: 'TEXT', text: '決定莊家' });
                 
                 // Step 5: Start Game (After 3s)
                 this.initTimeouts.push(setTimeout(() => {
@@ -190,6 +207,9 @@ export class MockBackend {
   }
 
   private dealTiles() {
+    // Determine who starts based on Dealer (East)
+    const dealerIdx = this.players.findIndex(p => p.info.isDealer);
+    
     // Deal Tiles (16 each)
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 16; j++) {
@@ -200,17 +220,20 @@ export class MockBackend {
       this.sortHand(this.players[i].hand);
     }
 
-    // Dealer (P0) gets 17th tile
-    this.players[0].hand.push(this.deck.pop()!);
+    // Dealer gets 17th tile
+    if (this.deck.length > 0) {
+       this.players[dealerIdx].hand.push(this.deck.pop()!);
+       this.sortHand(this.players[dealerIdx].hand);
+    }
     
-    this.state.turn = 0; // P0 starts
+    this.state.turn = dealerIdx; 
     this.state.state = 'DISCARD';
     this.state.lastDiscard = null;
     
     this.broadcastState();
     this.socket.trigger('game:effect', { type: 'TEXT', text: '遊戲開始' });
     
-    // Start the turn timer for the Dealer
+    // Start the turn timer
     this.startTurnTimer();
   }
 
@@ -239,19 +262,15 @@ export class MockBackend {
       const player = this.players[currentPlayerIdx];
       
       // Auto discard the NEWEST tile (last in the array)
-      // This assumes the new tile was pushed to the end and hand was not sorted yet
       const tileIndex = player.hand.length - 1;
       
-      // Visual feedback
       this.socket.trigger('game:effect', { type: 'TEXT', text: '超時自動出牌' });
-      
       this.performDiscard(currentPlayerIdx, tileIndex);
   }
 
   private handleHumanDiscard(tileIndex: number) {
     if (this.state.turn !== 0) return;
     
-    // Stop the timer since human acted
     this.clearTimers();
     this.performDiscard(0, tileIndex);
   }
@@ -263,18 +282,17 @@ export class MockBackend {
     const tile = player.hand.splice(tileIndex, 1)[0];
     player.discards.push(tile);
     
-    // Important: Sort hand AFTER discard, so the hand structure is clean for next wait
     this.sortHand(player.hand);
 
     this.state.lastDiscard = { tile, playerIndex: playerIdx };
-    this.state.state = 'WAIT'; // State where other players could interact (Pong/Kong)
+    this.state.state = 'WAIT'; 
     this.broadcastState();
 
-    // Check for wins/interactions here (Mock skipped for brevity)
+    // Check for wins/interactions here
     
     // Delay before next turn
     setTimeout(() => {
-        this.nextTurn(playerIdx + 1);
+        this.nextTurn((playerIdx + 1) % 4);
     }, 800);
   }
 
@@ -294,37 +312,30 @@ export class MockBackend {
 
     const newTile = this.deck.pop()!;
     this.players[idx].hand.push(newTile);
-    // NOTE: Do NOT sort here. Keep new tile at the end for auto-discard logic.
     
     this.state.lastDiscard = null; 
     
+    // If it's user's turn (0)
     if (idx === 0) {
         this.state.state = 'DISCARD';
     } else {
         this.state.state = 'THINKING';
-        // Simulate Bot "Thinking" but ensure they act within the timer window
-        // If this timeout fails, the main server timer (startTurnTimer) will catch it.
         this.botTimeout = setTimeout(() => {
             this.botDiscard(idx);
         }, 1500 + Math.random() * 2000);
     }
 
-    // Start the hard limit timer for EVERYONE (Human and Bot)
     this.startTurnTimer();
   }
 
   private botDiscard(playerIdx: number) {
-    // Bot acted, so we clear the hard limit timer
     this.clearTimers();
-    
     const player = this.players[playerIdx];
-    // Random discard
     const discardIdx = Math.floor(Math.random() * player.hand.length);
     this.performDiscard(playerIdx, discardIdx);
   }
 
   private broadcastState() {
-    // Convert internal state to DTO (hide other players' hands)
     const dto: GameStateDTO = {
       deckCount: this.deck.length,
       players: this.players.map((p, i) => ({

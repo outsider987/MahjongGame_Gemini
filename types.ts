@@ -37,14 +37,15 @@ export interface Player {
   score: number;
   isDealer: boolean; 
   flowerCount: number;
-  wind: string;
-  seatWind: string;
+  wind: string;     // The wind assigned to this player (East/South/West/North)
+  seatWind: string; // The wind of the seat relative to the dealer
 }
 
 export interface InitData {
   step: 'WAITING' | 'DICE' | 'SHUFFLE' | 'REVEAL';
   diceValues: number[];
-  windAssignment: Record<string, string>; // playerId -> 'EAST' etc.
+  // Maps player index (0-3) to the Wind Suit Value (1=East, 2=South, 3=West, 4=North)
+  windAssignment: Record<string, number>; 
 }
 
 // Data Transfer Object for Game State (matched with Go backend)

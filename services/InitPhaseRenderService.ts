@@ -20,10 +20,11 @@ export class InitPhaseRenderService {
         p.push();
         p.translate(width / 2, height / 2);
         
-        if (step === 'DICE') {
+        if (step === 'WAITING') {
+            this.drawWaiting(ctx);
+        } else if (step === 'DICE') {
             this.drawDiceAnimation(ctx, initData.diceValues);
         } else if (step === 'SHUFFLE') {
-            // Show Dice fading out or smaller? Just tiles for now.
             this.drawShufflingTiles(ctx);
         } else if (step === 'REVEAL') {
             this.drawRevealWinds(ctx, initData.windAssignment);
@@ -32,26 +33,66 @@ export class InitPhaseRenderService {
         p.pop();
     }
 
+    private static drawWaiting(ctx: RenderContext) {
+        const { p, globalScale } = ctx;
+        p.textAlign(p.CENTER);
+        p.textSize(24 * globalScale);
+        p.fill(255);
+        p.text("等待玩家加入...", 0, 0);
+        p.textSize(14 * globalScale);
+        p.fill(255, 255, 255, 150);
+        p.text("伺服器連線中", 0, 30 * globalScale);
+    }
+
     private static drawDiceAnimation(ctx: RenderContext, values: number[]) {
         const { p, globalScale } = ctx;
         const size = 60 * globalScale;
         const gap = 20 * globalScale;
         
-        // Animation: Rotate slightly based on frameCount
-        const angle = Math.sin(p.frameCount * 0.1) * 0.1;
+        // Animation: Shake effect
+        // We use a sine wave on time to create intensity
+        const time = p.millis();
+        // The animation plays for roughly 2500ms. 
+        // 0-1800ms: Shaking. 1800-2500ms: Settled.
+        const phase = time % 2500;
+        const isSettling = phase > 1800;
+        
+        // Decay Shake Intensity
+        let shakeIntensity = 0;
+        if (!isSettling) {
+            // High intensity start, decaying over time
+            shakeIntensity = p.map(phase, 0, 1800, 10, 0, true);
+        }
+
+        // Random shake offset
+        const shakeX = p.random(-shakeIntensity, shakeIntensity);
+        const shakeY = p.random(-shakeIntensity, shakeIntensity);
+        
+        // Rotation shake
+        const rot = p.random(-0.1 * shakeIntensity, 0.1 * shakeIntensity);
+
+        p.textAlign(p.CENTER);
+        p.textSize(20 * globalScale);
+        p.fill('#fbbf24');
+        p.text("莊家擲骰決定抓位順序", 0, -100 * globalScale);
+
+        p.push();
+        p.translate(shakeX, shakeY);
 
         // Dice 1
         p.push();
         p.translate(-(size/2 + gap/2), 0);
-        p.rotate(angle);
+        p.rotate(rot);
         this.drawSingleDie(p, size, values[0]);
         p.pop();
 
         // Dice 2
         p.push();
         p.translate((size/2 + gap/2), 0);
-        p.rotate(-angle);
+        p.rotate(-rot);
         this.drawSingleDie(p, size, values[1]);
+        p.pop();
+
         p.pop();
     }
 
@@ -104,8 +145,13 @@ export class InitPhaseRenderService {
         const h = 80 * globalScale;
         const radius = 100 * globalScale;
         
-        // Rotate tiles in a circle
-        const speed = p.frameCount * 0.05;
+        p.textAlign(p.CENTER);
+        p.textSize(20 * globalScale);
+        p.fill('#fbbf24');
+        p.text("洗牌中...", 0, -150 * globalScale);
+
+        // Rotate tiles in a circle quickly
+        const speed = p.frameCount * 0.2;
         
         for(let i=0; i<4; i++) {
             p.push();
@@ -114,27 +160,27 @@ export class InitPhaseRenderService {
             p.rotate(angle + p.HALF_PI);
             
             // Draw Face Down Tile
-            // Using TileRenderService but forcing BACK_STANDING look or just manually drawing back
-            // We'll reuse BACK_STANDING logic but centered
             p.translate(-w/2, -h/2);
-            
-            // Custom simple back draw for rotation
-            p.fill('#047857');
+            p.fill('#047857'); // Tile Back Green
+            p.stroke('#064e3b');
+            p.strokeWeight(2);
             p.rect(0, 0, w, h, 6);
-            p.fill(255,255,255,50);
-            p.rect(0,0,w,h,6); // shine
+            
+            // Shine
+            p.noStroke();
+            p.fill(255,255,255,30);
+            p.rect(0,0,w,h,6); 
             
             p.pop();
         }
     }
 
-    private static drawRevealWinds(ctx: RenderContext, assignment: Record<string, string>) {
+    private static drawRevealWinds(ctx: RenderContext, assignment: Record<string, number>) {
         const { p, globalScale } = ctx;
         const w = 70 * globalScale;
         const h = 96 * globalScale;
         
         // Standard Layout: Bottom(0), Right(1), Top(2), Left(3)
-        // We show the tile assigned to them.
         const positions = [
             { x: 0, y: 150 * globalScale, label: "您" }, // Bottom
             { x: 250 * globalScale, y: 0, label: "下家" }, // Right
@@ -142,26 +188,52 @@ export class InitPhaseRenderService {
             { x: -250 * globalScale, y: 0, label: "上家" }, // Left
         ];
 
+        // Animation: Flip effect
+        // We assume this state lasts ~3 seconds.
+        // We want a flip animation that starts shortly after entering state.
+        // Since we don't have absolute state entry time in this stateless render,
+        // we use a looped helper or just open them. 
+        // To create a "Flip" visual, we can just keep them open as the previous state was "SHUFFLE" (Face Down).
+        // But to add juice, let's pulse the scale.
+        
+        const pulse = 1 + Math.sin(p.frameCount * 0.05) * 0.02;
+
         positions.forEach((pos, idx) => {
             p.push();
             p.translate(pos.x, pos.y);
-            
-            // Animate pop in
-            const scaleAnim = Math.min(1, (p.frameCount % 30) / 10 + 0.5); 
-            // Note: In a real app we'd use a consistent start time from DTO, but frameCount is okay for mock.
-            
-            // Get Wind Tile
-            // Assignment: 'EAST' | 'SOUTH' | 'WEST' | 'NORTH'
-            const windName = assignment[String(idx)] || 'EAST';
-            const valMap: Record<string, number> = { 'EAST': 1, 'SOUTH': 2, 'WEST': 3, 'NORTH': 4 };
-            const val = valMap[windName];
+            p.scale(pulse); // Subtle breathe effect
 
+            // Wind Value: 1=East, 2=South, 3=West, 4=North
+            const val = assignment[String(idx)] || 1;
             const tile: Tile = { id: 'init', suit: Suit.WINDS, value: val, isFlower: false };
             
             // Draw Centered
             p.translate(-w/2, -h/2);
+            
+            // Render Flat Tile
             TileRenderService.drawTile(p, 0, 0, tile, w, h, 'FLAT', globalScale);
             
+            // Highlight Dealer (East = 1)
+            if (val === 1) {
+                p.push();
+                p.translate(w/2, -25 * globalScale);
+                
+                // Glowing Dealer Indicator
+                p.drawingContext.shadowColor = '#ef4444';
+                p.drawingContext.shadowBlur = 15;
+                p.fill('#ef4444');
+                p.noStroke();
+                p.circle(0, 0, 24 * globalScale);
+                p.drawingContext.shadowBlur = 0;
+
+                p.fill(255);
+                p.textAlign(p.CENTER, p.CENTER);
+                p.textSize(12 * globalScale);
+                p.textStyle(p.BOLD);
+                p.text("莊", 0, 0);
+                p.pop();
+            }
+
             // Label
             p.fill('#fbbf24');
             p.noStroke();
