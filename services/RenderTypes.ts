@@ -10,6 +10,7 @@ export type RenderContext = {
   width: number;
   height: number;
   hoveredTileIndex: number;
+  selectedTileIndex: number; // Added selection state
   animation: {
     lastTurnTime: number;
     lastDiscardTime: number;

@@ -38,7 +38,9 @@ export class MockStateStore {
         isDealer: false,
         flowerCount: 0,
         wind: "",
-        seatWind: "" 
+        seatWind: "",
+        isRichii: false,
+        richiiDiscardIndex: -1
       },
       hand: [],
       discards: [],

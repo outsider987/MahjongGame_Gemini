@@ -71,6 +71,50 @@ export class MahjongRules {
   }
 
   /**
+   * Checks if a hand is in "Tenpai" (Ready state).
+   * Returns an array of tiles that would complete the hand.
+   * If array is not empty, the hand is Ready.
+   */
+  static getTenpaiWaitingTiles(hand: Tile[]): Tile[] {
+    // Simplified logic: Iterate through all 34 types of tiles.
+    // If adding one results in a win, the hand is waiting.
+    
+    // 1. Filter out flowers (sanity check)
+    const baseHand = hand.filter(t => t.suit !== Suit.FLOWERS);
+    
+    // Optimization: If hand length % 3 != 1, it cannot be waiting for a single tile.
+    // (Standard hand is 13 tiles, waiting for 14th)
+    if (baseHand.length % 3 !== 1) return [];
+
+    const winningTiles: Tile[] = [];
+
+    // Helper to create temp tile
+    const testTile = (suit: Suit, val: number) => ({ id: 'temp', suit, value: val, isFlower: false });
+
+    // Test Suits 1-9
+    [Suit.DOTS, Suit.BAMBOO, Suit.CHARACTERS].forEach(suit => {
+        for (let v = 1; v <= 9; v++) {
+            const t = testTile(suit, v);
+            if (this.checkWin(baseHand, t)) winningTiles.push(t);
+        }
+    });
+
+    // Test Winds 1-4
+    for (let v = 1; v <= 4; v++) {
+        const t = testTile(Suit.WINDS, v);
+        if (this.checkWin(baseHand, t)) winningTiles.push(t);
+    }
+
+    // Test Dragons 1-3
+    for (let v = 1; v <= 3; v++) {
+        const t = testTile(Suit.DRAGONS, v);
+        if (this.checkWin(baseHand, t)) winningTiles.push(t);
+    }
+
+    return winningTiles;
+  }
+
+  /**
    * Standard Win Algorithm (3n + 2)
    * Checks if the hand is composed of valid sets (sequences/triplets) and one pair.
    */

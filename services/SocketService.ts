@@ -1,6 +1,6 @@
 
 import { io, Socket } from "socket.io-client";
-import { AppView, GameStateEnum } from "../types";
+import { AppView, GameStateEnum, ActionType } from "../types";
 import { MockBackend, MockSocket } from './MockBackend';
 
 // Define Server-to-Client Events
@@ -68,7 +68,7 @@ class SocketService {
     this.socket?.emit("action:discard", tileIndex);
   }
 
-  public sendAction(action: 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS') {
+  public sendAction(action: ActionType) {
     this.socket?.emit("action:operate", action);
   }
   

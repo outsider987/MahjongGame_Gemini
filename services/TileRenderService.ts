@@ -40,20 +40,20 @@ export class TileRenderService {
   private static drawStandingTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
       const ctx = p.drawingContext;
       const depth = 12 * scale;
-      const r = 4 * scale; // Radius
+      const r = 6 * scale; // Smoother corners
 
-      // 1. Shadow
+      // 1. Shadow (Smoother and deeper)
       p.noStroke();
-      p.fill(COLORS.TILE_SHADOW);
-      p.rect(depth * 0.5, depth * 0.5, w, h, r);
+      p.fill(0, 0, 0, 60);
+      // Offset shadow slightly more for depth
+      p.rect(depth * 0.6, depth * 0.6, w, h, r);
 
       // 2. The Green Back Body (Jade texture)
       const grdBack = ctx.createLinearGradient(0, 0, w, 0);
-      grdBack.addColorStop(0, COLORS.TILE_BACK_DARK);
-      grdBack.addColorStop(0.5, COLORS.TILE_BACK_MAIN);
-      grdBack.addColorStop(1, COLORS.TILE_BACK_DARK);
+      grdBack.addColorStop(0, '#064e3b');
+      grdBack.addColorStop(0.4, '#10b981'); // Bright ridge
+      grdBack.addColorStop(1, '#064e3b');
       
-      p.fill(COLORS.TILE_BACK_MAIN); // Fallback
       ctx.fillStyle = grdBack;
       p.rect(0, 0, w, h, r);
 
@@ -61,20 +61,20 @@ export class TileRenderService {
       const faceDepth = 3 * scale; 
       p.translate(0, -faceDepth);
       
-      // Face Gradient (Subtle curve look)
+      // Face Gradient (Subtle curve look - Bone)
       const grdFace = ctx.createLinearGradient(0, 0, w, h);
       grdFace.addColorStop(0, '#ffffff');
-      grdFace.addColorStop(1, '#f0f0f0');
+      grdFace.addColorStop(1, '#f1f5f9');
       
       ctx.fillStyle = grdFace;
       p.rect(0, 0, w, h, r);
       
-      // 4. Glossy Highlight
-      const grdGloss = ctx.createLinearGradient(0, 0, 0, h/2);
-      grdGloss.addColorStop(0, 'rgba(255,255,255,0.6)');
+      // 4. Glossy Highlight (Top Shine)
+      const grdGloss = ctx.createLinearGradient(0, 0, 0, h * 0.4);
+      grdGloss.addColorStop(0, 'rgba(255,255,255,0.8)');
       grdGloss.addColorStop(1, 'rgba(255,255,255,0.0)');
       ctx.fillStyle = grdGloss;
-      p.rect(0, 0, w, h/2, r, r, 0, 0);
+      p.rect(0, 0, w, h * 0.4, r, r, 0, 0);
 
       // 5. Tile Content
       if (tile) {
@@ -85,13 +85,13 @@ export class TileRenderService {
   // --- 2. Flat Tile (Table Discards / Melds) ---
   private static drawFlatTile(p: any, tile: Tile | null, w: number, h: number, scale: number) {
       const ctx = p.drawingContext;
-      const r = 3 * scale;
+      const r = 4 * scale;
 
       // 1. Shadow
-      const thickness = 10 * scale;
+      const thickness = 8 * scale;
       p.noStroke();
-      p.fill(COLORS.TILE_SHADOW);
-      p.rect(6*scale, 6*scale, w, h + thickness, r);
+      p.fill(0, 0, 0, 50);
+      p.rect(4*scale, 4*scale, w, h + thickness, r);
 
       // 2. Green Base (Side Thickness)
       const grdThick = ctx.createLinearGradient(0, h, 0, h + thickness);
@@ -106,12 +106,13 @@ export class TileRenderService {
       p.vertex(w, h + thickness - r);
       p.vertex(0, h + thickness - r);
       p.endShape(p.CLOSE);
+      // Bottom rect
       p.rect(0, h - r, w, thickness, 0, 0, r, r);
 
       // 3. The White Face
       const grdFace = ctx.createLinearGradient(0, 0, 0, h);
       grdFace.addColorStop(0, '#ffffff');
-      grdFace.addColorStop(1, '#e8e8e8');
+      grdFace.addColorStop(1, '#e2e8f0');
       ctx.fillStyle = grdFace;
       p.rect(0, 0, w, h, r);
 
@@ -122,143 +123,89 @@ export class TileRenderService {
       
       // 6. Surface Shine
       p.noStroke();
-      p.fill(255, 255, 255, 30);
+      p.fill(255, 255, 255, 40);
       p.ellipse(w * 0.8, h * 0.2, w * 0.6, h * 0.3);
   }
 
   // --- 3. Back Standing (Opponent Top) ---
   private static drawBackStandingTile(p: any, w: number, h: number, scale: number) {
       const ctx = p.drawingContext;
-      const r = 3 * scale;
+      const r = 4 * scale;
       const depth = 4 * scale;
 
       // Shadow
-      p.fill(COLORS.TILE_SHADOW);
+      p.fill(0, 0, 0, 60);
       p.rect(depth, depth, w, h, r);
 
       // Main Green Back
-      const grd = ctx.createLinearGradient(0, 0, w, h);
-      grd.addColorStop(0, COLORS.TILE_BACK_LIGHT);
-      grd.addColorStop(1, COLORS.TILE_BACK_DARK);
+      const grd = ctx.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#065f46');
+      grd.addColorStop(0.5, '#10b981'); // Highlight in middle
+      grd.addColorStop(1, '#065f46');
       ctx.fillStyle = grd;
       p.rect(0, 0, w, h, r);
       
       // Top Highlight (Curved top of standing tile)
       p.fill(255, 255, 255, 150);
-      p.rect(0, 0, w, 4 * scale, r, r, 0, 0);
+      p.rect(0, 0, w, 3 * scale, r, r, 0, 0);
   }
 
   // --- 4. Side Standing (Opponent Left/Right) ---
-  // Draws a realistic 2.5D vertical tile viewed from the side
   private static drawSideStandingTile(p: any, stepW: number, lenH: number, scale: number, isLeft: boolean) {
       const ctx = p.drawingContext;
+      const dw = lenH; 
+      const dh = stepW; 
       
-      // In the rotated context:
-      // 'dw' is the visual Height of the tile (Vertical axis on screen)
-      // 'dh' is the visual Width/Thickness of the tile (Horizontal axis on screen)
-      const dw = lenH; // The length of the tile (~64px)
-      const dh = stepW; // The thickness of the tile (~32px)
-      
-      // 1. Shadow (Offset slightly to imply ground contact)
+      // 1. Shadow
       p.noStroke();
-      p.fill(COLORS.TILE_SHADOW);
-      // Shadow is projected behind
-      p.rect(4*scale, 4*scale, dw, dh, 3*scale);
+      p.fill(0, 0, 0, 60);
+      p.rect(4*scale, 4*scale, dw, dh, 4*scale);
 
-      // 2. Material Split (Bone vs Bamboo)
-      // Usually, standing tiles viewed from side show the seam.
-      // We split the Thickness (dh) into Bone section (Face) and Bamboo section (Back).
-      // Approx 35% Bone, 65% Bamboo.
+      // 2. Material Split
       const boneRatio = 0.35;
       const boneSize = dh * boneRatio;
       const bambooSize = dh - boneSize;
       
-      // --- Draw Main Body ---
-      
-      // A. Bone Section (Ivory White)
-      // Gradient goes along the thickness to imply roundness
+      // A. Bone Section
       const grdBone = ctx.createLinearGradient(0, 0, 0, boneSize);
       grdBone.addColorStop(0, '#ffffff');
-      grdBone.addColorStop(0.8, COLORS.TILE_SECTION_BONE);
-      grdBone.addColorStop(1, '#cbd5e1'); // Slight darkening at joint
+      grdBone.addColorStop(1, '#cbd5e1');
       ctx.fillStyle = grdBone;
       p.rect(0, 0, dw, boneSize);
       
-      // B. Bamboo Section (Jade Green)
+      // B. Bamboo Section
       const grdBamboo = ctx.createLinearGradient(0, boneSize, 0, dh);
-      grdBamboo.addColorStop(0, COLORS.TILE_SECTION_BAMBOO_LIGHT); // Highlight near joint
-      grdBamboo.addColorStop(0.5, COLORS.TILE_SECTION_BAMBOO);
-      grdBamboo.addColorStop(1, COLORS.TILE_BACK_DARK); // Shadow at back edge
+      grdBamboo.addColorStop(0, '#10b981');
+      grdBamboo.addColorStop(1, '#064e3b');
       ctx.fillStyle = grdBamboo;
       p.rect(0, boneSize, dw, bambooSize);
 
-      // C. Dovetail Joint (The zigzag connector)
-      // Drawn vertically along the tile height
-      p.stroke(COLORS.TILE_BACK_DARK);
+      // C. Dovetail Joint
+      p.stroke('#064e3b');
       p.strokeWeight(1 * scale);
       p.noFill();
       p.beginShape();
-      const zigSize = 5 * scale;
+      const zigSize = 6 * scale;
       for(let i = 0; i <= dw; i += zigSize) {
-          // Draw zigzag centered on the seam (boneSize)
           p.vertex(i, boneSize);
           p.vertex(i + zigSize/2, boneSize + (1.5 * scale));
       }
       p.endShape();
       p.noStroke();
 
-      // --- 3. Top Cap (The "Standing" Perspective) ---
-      // This implies the 2.5D look. We see the "Top" of the tile.
-      // Right Player (isLeft=false): +X is Screen Down. Top of Tile is Low X (0).
-      // Left Player (isLeft=true): +X is Screen Up. Top of Tile is High X (dw).
+      // --- 3. Top Cap ---
+      const capSize = 6 * scale; 
+      let capX = isLeft ? dw - capSize : 0;
       
-      const capSize = 8 * scale; // Visual height of the cap
+      const grdCap = ctx.createLinearGradient(capX, 0, capX+capSize, 0);
+      grdCap.addColorStop(0, '#f8fafc');
+      grdCap.addColorStop(1, '#e2e8f0');
+      ctx.fillStyle = grdCap;
+      p.rect(capX, 0, capSize, dh, 2*scale);
       
-      // Determine location
-      let capX = 0;
-      let capH = capSize;
-      
-      if (isLeft) {
-          // Left Player: Top is at dw (Screen Top).
-          // We draw the cap at the very end of the bar.
-          capX = dw - capSize;
-          
-          // Draw White Top Cap
-          const grdCap = ctx.createLinearGradient(capX, 0, dw, 0);
-          grdCap.addColorStop(0, '#e2e8f0');
-          grdCap.addColorStop(0.4, '#ffffff');
-          ctx.fillStyle = grdCap;
-          
-          // Draw a rounded rect at the top
-          p.rect(capX, 0, capSize, dh, 2*scale);
-          
-          // Add a shiny highlight on the green part of the cap
-          p.fill(255, 255, 255, 100);
-          p.rect(capX, boneSize, capSize, bambooSize, 0, 2*scale, 2*scale, 0);
-
-      } else {
-          // Right Player: Top is at 0 (Screen Top).
-          capX = 0;
-          
-          // Draw White Top Cap
-          const grdCap = ctx.createLinearGradient(0, 0, capSize, 0);
-          grdCap.addColorStop(0, '#ffffff');
-          grdCap.addColorStop(1, '#e2e8f0');
-          ctx.fillStyle = grdCap;
-          
-          // Draw a rounded rect at the start
-          p.rect(0, 0, capSize, dh, 2*scale);
-          
-          // Shiny highlight
-          p.fill(255, 255, 255, 100);
-          p.rect(0, boneSize, capSize, bambooSize, 0, 0, 2*scale, 2*scale);
-      }
-      
-      // --- 4. Side Glint ---
-      // A subtle white line running down the green curvature to show material gloss
-      p.fill(255, 255, 255, 30);
-      // Highlight runs along length 'dw', positioned slightly into the green part
-      p.rect(0, boneSize + (3*scale), dw, 2*scale);
+      // Shiny highlight on green cap part
+      p.fill(255, 255, 255, 120);
+      p.rect(capX, boneSize, capSize, bambooSize, 0, 2*scale, 2*scale, 0);
   }
   
   // --- Content Drawing (Face) ---
@@ -270,9 +217,10 @@ export class TileRenderService {
       
       if (img && img.width > 1) {
           const padding = w * 0.15;
-          // Engraving Shadow (Bottom-Right)
-          p.tint(0, 0, 0, 40); 
+          // Engraving Effect (Inner Shadow)
+          p.tint(0, 0, 0, 60); 
           p.imageMode(p.CENTER);
+          // Shift slightly down-right to create "engraved" look
           p.image(img, 1, 1, w - padding, h - padding);
           
           p.noTint();
@@ -287,6 +235,6 @@ export class TileRenderService {
       p.textAlign(p.CENTER, p.CENTER);
       p.textSize(w * 0.6);
       p.fill(0);
-      // ... Simple text fallback
+      p.text(tile.value, 0, 0);
   }
 }

@@ -39,6 +39,8 @@ export interface Player {
   flowerCount: number;
   wind: string;     // The wind assigned to this player (East/South/West/North)
   seatWind: string; // The wind of the seat relative to the dealer
+  isRichii: boolean;        // Is the hand locked in Ready state?
+  richiiDiscardIndex: number; // The index of the discard tile that was rotated (-1 if none)
 }
 
 export interface InitData {
@@ -66,7 +68,7 @@ export interface GameStateDTO {
   initData?: InitData; // Optional data for STATE_INIT phase
 }
 
-export type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS';
+export type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS' | 'RICHII';
 
 export interface Meld {
   type: ActionType;

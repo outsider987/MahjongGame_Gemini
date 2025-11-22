@@ -20,10 +20,10 @@ interface GameCanvasProps {
 const INITIAL_MOCK_STATE: GameStateDTO = {
     deckCount: 144,
     players: [
-        { info: { id: 0, name: "連線中...", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "東", seatWind: "東" }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 1, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "南", seatWind: "南" }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 2, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "西", seatWind: "西" }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 3, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "北", seatWind: "北" }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 0, name: "連線中...", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "東", seatWind: "東", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 1, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "南", seatWind: "南", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 2, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "西", seatWind: "西", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 3, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "北", seatWind: "北", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
     ],
     turn: 0,
     state: 'WAIT_CONNECTION',
@@ -51,6 +51,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   // Interaction State
   const hitTestMetrics = useRef<RenderMetrics>({ p0HandStartX: 0, p0TileW: 0 });
   const hoveredTileRef = useRef<number>(-1);
+  const selectedTileRef = useRef<number>(-1);
 
   // UI State (React managed)
   const [activePlayerIndex, setActivePlayerIndex] = useState(0);
@@ -73,26 +74,32 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     socket.on("game:state", (newState: GameStateDTO) => {
         const prev = prevGameRef.current;
         
-        // 1. Detect Turn Change (for Draw Animation)
+        // 1. Detect Turn Change
         if (prev.turn !== newState.turn) {
             animState.current.lastTurnTime = Date.now();
+            // Reset selection on turn change
+            selectedTileRef.current = -1;
         }
 
-        // 2. Detect Discard (for Discard Animation)
-        // We check if the total number of discards increased
+        // 2. Detect Discard
         const prevTotal = prev.players.reduce((sum, p) => sum + p.discards.length, 0);
         const newTotal = newState.players.reduce((sum, p) => sum + p.discards.length, 0);
         
         if (newTotal > prevTotal) {
             animState.current.lastDiscardTime = Date.now();
             animState.current.discardingPlayer = newState.lastDiscard?.playerIndex ?? -1;
+            
+            // Also reset selection if we just discarded
+            if (newState.lastDiscard?.playerIndex === 0) {
+                selectedTileRef.current = -1;
+            }
         }
 
         // Update Refs
         prevGameRef.current = newState;
         gameRef.current = newState;
         
-        // Update React State for UI Overlay
+        // Update React State
         setAvailableActions(newState.availableActions || []);
         setActivePlayerIndex(newState.turn);
     });
@@ -173,6 +180,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
   // --- Interaction Handlers ---
   const handleDiscard = (tileIndex: number) => {
+      // Optimistic update to UI
+      selectedTileRef.current = -1;
       socketService.sendDiscard(tileIndex);
   };
 
@@ -209,17 +218,46 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
             effects: effectsRef.current
         };
 
+        // Update Input Hover
+        updateHitTest(p, globalScale);
+
         // Draw
         hitTestMetrics.current = RenderService.drawScene(
           p, 
           renderState, 
           globalScale, 
           hoveredTileRef.current,
+          selectedTileRef.current,
           animState.current
         );
+      };
 
-        // Input Logic
-        updateHitTest(p, globalScale);
+      p.mousePressed = () => {
+          // 1. Basic State Checks
+          const isMyTurn = gameRef.current.turn === 0; 
+          const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
+          const isRichii = gameRef.current.players[0]?.info.isRichii;
+
+          // If clicked outside or invalid state, deselect
+          if (!isMyTurn || !canDiscard || isRichii) {
+             selectedTileRef.current = -1;
+             return;
+          }
+
+          if (hoveredTileRef.current !== -1) {
+               // Interaction Logic: Select -> Confirm
+               if (selectedTileRef.current === hoveredTileRef.current) {
+                   // Clicked on already selected tile -> Action: Discard
+                   handleDiscard(hoveredTileRef.current);
+                   hoveredTileRef.current = -1; // Reset hover to prevent immediate re-trigger
+               } else {
+                   // Clicked on a new tile -> Action: Select
+                   selectedTileRef.current = hoveredTileRef.current;
+               }
+          } else {
+              // Clicked on background (within canvas) -> Action: Deselect
+              selectedTileRef.current = -1;
+          }
       };
 
       const updateHitTest = (p: any, scale: number) => {
@@ -227,16 +265,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           
           const isMyTurn = gameRef.current.turn === 0; 
           const canDiscard = gameRef.current.state === 'DISCARD' || gameRef.current.state === 'STATE_DISCARD';
-
-          if (!isMyTurn || !canDiscard) return;
+          const isRichii = gameRef.current.players[0]?.info.isRichii;
+          
+          // Allow hover even if not turn, for inspecting tiles (future feature), but for now restrict to turn
+          // Actually, allowing hover anytime feels better, but only select if turn.
+          if (!isMyTurn || !canDiscard || isRichii) return;
 
           const mX = p.mouseX;
           const mY = p.mouseY;
           const handY = p.height - (130 * scale);
           
           const { p0HandStartX, p0TileW } = hitTestMetrics.current;
-
-          if (mY > handY - 60 && mY < handY + 60) {
+          
+          // Expanded hit area for better UX
+          if (mY > handY - 80 && mY < handY + 80) {
               if (p0HandStartX !== 0) {
                   const relativeX = mX - p0HandStartX;
                   if (relativeX >= 0) {
@@ -247,20 +289,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                       const normalWidth = (isNewTileState ? p0HandLen - 1 : p0HandLen) * effectiveW;
                       
                       if (isNewTileState && relativeX > normalWidth) {
-                          if (relativeX > normalWidth + (20 * scale)) hoveredTileRef.current = p0HandLen - 1;
+                          // The extra tile (newly drawn)
+                          if (relativeX > normalWidth + (10 * scale)) hoveredTileRef.current = p0HandLen - 1;
                       } else if (relativeX <= normalWidth) {
                            const idx = Math.floor(relativeX / effectiveW);
                            if (idx < p0HandLen) hoveredTileRef.current = idx;
                       }
                   }
               }
-          }
-
-          if (p.mouseIsPressed && hoveredTileRef.current !== -1) {
-               if (p.frameCount % 10 === 0) {
-                   handleDiscard(hoveredTileRef.current);
-                   hoveredTileRef.current = -1; 
-               }
           }
       };
     };
@@ -278,7 +314,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef}>
       
-      {/* --- NEW Floating Info Capsule (Top Left) --- */}
+      {/* --- Floating Info Capsule (Top Left) --- */}
       <div className="absolute top-4 left-4 z-50 flex items-center gap-3 animate-fade-in">
            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg transition-all hover:bg-black/60 cursor-default group select-none">
                <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${isConnected ? 'bg-green-500 text-green-500' : 'bg-red-500 text-red-500'} animate-pulse`}></span>
@@ -288,7 +324,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
            </div>
       </div>
 
-      {/* --- NEW Collapsible System Menu (Top Right) --- */}
+      {/* --- Collapsible System Menu (Top Right) --- */}
       <div className="absolute top-4 right-4 z-50">
            <button 
                onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -387,6 +423,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                 {availableActions.includes('KONG') && (
                    <button onClick={() => handlePlayerAction('KONG')} className="w-20 h-20 bg-purple-600 text-white font-black text-3xl rounded-full border-4 border-purple-400 hover:scale-110 transition-transform">槓</button>
                 )}
+                {availableActions.includes('RICHII') && (
+                   <button onClick={() => handlePlayerAction('RICHII')} className="w-24 h-24 -mt-4 bg-orange-600 text-yellow-100 font-black text-3xl rounded-full border-4 border-orange-400 hover:scale-110 transition-transform animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.8)] flex flex-col items-center justify-center">
+                        <span>立</span>
+                        <span className="text-sm">Riichi</span>
+                   </button>
+                )}
                 {availableActions.includes('HU') && (
                    <button onClick={() => handlePlayerAction('HU')} className="w-24 h-24 -mt-4 bg-red-600 text-yellow-100 font-black text-5xl rounded-full border-4 border-yellow-400 hover:scale-110 transition-transform animate-pulse shadow-[0_0_30px_rgba(220,38,38,0.8)]">胡</button>
                 )}
@@ -434,7 +476,13 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isS
         {player.isDealer && <div className="absolute -top-1 -right-1 z-20 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center border border-white shadow-sm"><span className="text-white text-[10px] font-serif font-bold">莊</span></div>}
       </div>
       <div className={`flex flex-col ${isSelf ? 'items-start order-2 mb-2' : (position === 'right' ? 'items-end mr-1' : (position === 'left' ? 'items-start ml-1' : 'items-center'))} z-0`}>
-         <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 shadow-lg">
+         <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 shadow-lg relative">
+            {/* Riichi Tag */}
+            {player.isRichii && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow border border-red-400 whitespace-nowrap animate-bounce">
+                    立直
+                </div>
+            )}
             <div className="text-white text-xs md:text-sm font-bold tracking-wide flex items-center gap-2">{player.name}</div>
             <div className={`text-xs font-mono font-bold mt-0.5 ${player.score >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{player.score > 0 ? '+' : ''}{player.score}</div>
          </div>

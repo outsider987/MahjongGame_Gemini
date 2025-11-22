@@ -15,6 +15,7 @@ export class RenderService {
     gameState: any, 
     globalScale: number, 
     hoveredTileIndex: number,
+    selectedTileIndex: number,
     animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; }
   ): RenderMetrics {
     
@@ -24,6 +25,7 @@ export class RenderService {
       width: p.width,
       height: p.height,
       hoveredTileIndex,
+      selectedTileIndex,
       animation
     };
 

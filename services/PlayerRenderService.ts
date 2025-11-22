@@ -142,6 +142,7 @@ export class PlayerRenderService {
       const h = 42 * globalScale; 
       const cols = 6; 
       const RIVER_OFFSET = 100 * globalScale;
+      const richiiIndex = player.info?.richiiDiscardIndex ?? -1;
 
       p.translate(width/2, height/2);
       
@@ -158,9 +159,26 @@ export class PlayerRenderService {
           const r = Math.floor(i / cols);
           const c = i % cols;
           const overlapY = -6 * globalScale; 
+          const isRichiiTile = (i === richiiIndex);
           
           p.push();
-          p.translate(startX + c*w, r*(h + overlapY));
+          
+          let drawX = startX + c*w;
+          let drawY = r*(h + overlapY);
+          
+          // If this specific tile is the Riichi tile, we rotate it
+          if (isRichiiTile) {
+             p.translate(drawX + w/2, drawY + h/2);
+             p.rotate(p.HALF_PI);
+             p.translate(-w/2, -h/2); // Recenter
+             p.translate((h-w)/2, 0);
+             drawX = 0;
+             drawY = 0;
+          } else {
+             p.translate(drawX, drawY);
+             drawX = 0; 
+             drawY = 0;
+          }
           
           // DISCARD ANIMATION (Toss & Settle)
           const isLastDiscard = (i === tiles.length - 1);
@@ -170,11 +188,8 @@ export class PlayerRenderService {
                
                if (elapsed < dur) {
                    const t = elapsed / dur;
-                   // Scale: Large to Normal (1.5 -> 1.0)
                    const scaleFactor = 1.5 - (0.5 * t);
-                   // Rotate: Spin slightly into place (0.2rad -> 0)
                    const rot = 0.2 * (1 - t);
-                   // Offset: Drop from height (-20 -> 0)
                    const dropY = -20 * globalScale * (1 - t);
                    
                    p.translate(0, dropY);
@@ -195,7 +210,7 @@ export class PlayerRenderService {
       dir: 1 | -1, type: string, 
       hasNewTile: boolean, playerIdx: number, newTileGap: number, isActive: boolean
   ) {
-      const { p, globalScale, hoveredTileIndex, animation } = ctx;
+      const { p, globalScale, hoveredTileIndex, selectedTileIndex, animation } = ctx;
       const count = hand.length;
       const gapIndex = hasNewTile ? count - 1 : -1;
       
@@ -208,32 +223,63 @@ export class PlayerRenderService {
           p.push();
           p.translate(drawX, renderY);
 
-          // DRAW ANIMATION (Flip Up)
-          // Only animate the last tile if it is "new" and the player is active
-          const isLastTile = (i === count - 1);
-          if (hasNewTile && isLastTile && isActive) {
-              const dur = 400; // ms
-              const elapsed = Date.now() - animation.lastTurnTime;
+          // --- SELECTION & HOVER LOGIC (Self Only) ---
+          if (playerIdx === 0) {
+              const isSelected = (i === selectedTileIndex);
+              const isHovered = (i === hoveredTileIndex);
               
-              if (elapsed < dur) {
-                  const t = elapsed / dur; 
-                  // Ease Out Quad
-                  const ease = 1 - (1 - t) * (1 - t);
+              if (isSelected) {
+                  const liftAmount = 30 * globalScale;
+                  p.translate(0, -liftAmount);
                   
-                  // Translate: Rise up from bottom
-                  const dropY = 30 * globalScale * (1 - ease);
+                  // Selection Glow (Back)
+                  p.push();
+                  p.drawingContext.shadowColor = "#fbbf24";
+                  p.drawingContext.shadowBlur = 25;
+                  p.noFill();
+                  p.stroke('#fbbf24');
+                  p.strokeWeight(2);
+                  p.rect(0, 0, w, h, 4);
+                  p.pop();
+
+                  // Arrow Indicator
+                  p.push();
+                  p.translate(w/2, -25 * globalScale);
+                  // Bounce arrow
+                  const bounce = Math.sin(p.frameCount * 0.2) * 5 * globalScale;
+                  p.translate(0, bounce);
                   
-                  // Scale Y: Flip Open (0.1 -> 1.0)
-                  const scaleY = 0.1 + (0.9 * ease);
-                  
-                  p.translate(0, dropY);
-                  // Simulate 3D Flip around X axis by scaling Y
-                  p.scale(1, scaleY);
+                  p.fill('#fbbf24');
+                  p.stroke(0);
+                  p.strokeWeight(1);
+                  // Upside down triangle
+                  p.triangle(
+                      -8 * globalScale, -8 * globalScale, 
+                      8 * globalScale, -8 * globalScale, 
+                      0, 4 * globalScale
+                  );
+                  p.pop();
+
+              } else if (isHovered) {
+                  const liftAmount = 10 * globalScale;
+                  p.translate(0, -liftAmount);
               }
           }
 
-          if (playerIdx === 0 && i === hoveredTileIndex) {
-              p.translate(0, -15 * globalScale);
+          // DRAW ANIMATION (Flip Up for new tile)
+          const isLastTile = (i === count - 1);
+          if (hasNewTile && isLastTile && isActive) {
+              const dur = 400; 
+              const elapsed = Date.now() - animation.lastTurnTime;
+              if (elapsed < dur) {
+                  const t = elapsed / dur; 
+                  const ease = 1 - (1 - t) * (1 - t);
+                  const dropY = 30 * globalScale * (1 - ease);
+                  const scaleY = 0.1 + (0.9 * ease);
+                  
+                  p.translate(0, dropY);
+                  p.scale(1, scaleY);
+              }
           }
           
           // @ts-ignore
@@ -273,10 +319,6 @@ export class PlayerRenderService {
               if (elapsed < dur) {
                   const t = elapsed / dur; 
                   const ease = 1 - (1 - t) * (1 - t);
-                  // For Left player, Y is horizontal in screen space due to rotation in parent
-                  // But here we are in local space where Y is perpendicular to tile line.
-                  // "Drop" means moving away from the center? Or simple scale.
-                  
                   const scaleY = 0.1 + (0.9 * ease);
                   p.scale(1, scaleY);
               }

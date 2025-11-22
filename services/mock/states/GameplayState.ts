@@ -31,6 +31,51 @@ export class GameplayState implements IGameState {
   private startTurn(ctx: IMockContext, playerIdx: number, skipDraw: boolean = false) {
       this.turnIdx = playerIdx;
       ctx.store.dto.turn = playerIdx;
+      const player = ctx.store.players[playerIdx];
+
+      // --- RICHII AUTO-MODE START ---
+      if (player.info.isRichii && !skipDraw) {
+          // Draw Tile
+          if (ctx.store.deck.length === 0) {
+              this.endGame(ctx, '流局');
+              return;
+          }
+          const newTile = ctx.store.deck.pop()!;
+          
+          // In-Game Flower Check (Recursive support)
+          if (isFlower(newTile)) {
+              this.handleInGameFlower(ctx, playerIdx, newTile);
+              return;
+          }
+          
+          player.hand.push(newTile);
+          ctx.store.sortHand(playerIdx);
+          
+          // Check Tsumo (Self Draw Win)
+          if (MahjongRules.checkWin(player.hand)) {
+               if (playerIdx === 0) {
+                   // Human still needs to click HU
+                   ctx.store.dto.availableActions = ['HU'];
+                   this.subState = 'DISCARD'; 
+                   ctx.store.dto.state = 'DISCARD';
+                   this.broadcast(ctx);
+               } else {
+                   // Bot Tsumo
+                   this.executeWin(ctx, playerIdx, true);
+               }
+               return;
+          }
+          
+          // Visual delay for "Tsumogiri" (Instant discard)
+          this.broadcast(ctx);
+          ctx.schedule(() => {
+              // Discard the tile we just drew (last in hand)
+              this.performDiscard(ctx, playerIdx, player.hand.length - 1);
+          }, 800);
+          return;
+      }
+      // --- RICHII AUTO-MODE END ---
+
 
       if (!skipDraw) {
           // Check for Deck Empty (Draw Game)
@@ -45,18 +90,20 @@ export class GameplayState implements IGameState {
           // In-Game Flower Check
           if (isFlower(newTile)) {
               this.handleInGameFlower(ctx, playerIdx, newTile);
-              return; // handleInGameFlower calls startTurn recursively or proceeds
+              return;
           }
 
-          ctx.store.players[playerIdx].hand.push(newTile);
+          player.hand.push(newTile);
           ctx.store.sortHand(playerIdx);
       }
 
+      ctx.store.dto.availableActions = [];
+
       // Check Self Win (Tsumo)
-      const hand = ctx.store.players[playerIdx].hand;
+      const hand = player.hand;
       if (MahjongRules.checkWin(hand)) {
           if (playerIdx === 0) {
-               ctx.store.dto.availableActions = ['HU'];
+               ctx.store.dto.availableActions.push('HU');
           } else {
                // Bot Tsumo - small chance to actually take it for excitement
                if (Math.random() > 0.7) {
@@ -64,8 +111,15 @@ export class GameplayState implements IGameState {
                    return;
                }
           }
-      } else {
-          ctx.store.dto.availableActions = [];
+      }
+      
+      // Check Riichi (Ready Hand)
+      if (!player.info.isRichii && playerIdx === 0) {
+          // If not already Riichi, and hand needs 1 tile to win
+          const waitingTiles = MahjongRules.getTenpaiWaitingTiles(hand);
+          if (waitingTiles.length > 0) {
+              ctx.store.dto.availableActions.push('RICHII');
+          }
       }
 
       // Set State
@@ -143,6 +197,12 @@ export class GameplayState implements IGameState {
       if (tileIndex < 0 || tileIndex >= player.hand.length) return;
 
       const tile = player.hand.splice(tileIndex, 1)[0];
+      
+      // Handle Riichi Discard Rotation
+      if (player.info.isRichii && player.info.richiiDiscardIndex === -1) {
+          player.info.richiiDiscardIndex = player.discards.length; // The next index to be pushed
+      }
+
       player.discards.push(tile);
       ctx.store.sortHand(playerIdx);
 
@@ -163,21 +223,25 @@ export class GameplayState implements IGameState {
           if (MahjongRules.checkWin(p.hand, discard)) {
               this.pendingClaims.push({ playerIdx: targetIdx, type: 'HU', priority: 100 });
           }
-          if (MahjongRules.canKong(p.hand, discard)) {
-               if (targetIdx === 0 || ctx.bot.shouldInteract('KONG')) {
-                   this.pendingClaims.push({ playerIdx: targetIdx, type: 'KONG', priority: 50 });
-               }
-          } else if (MahjongRules.canPong(p.hand, discard)) {
-               if (targetIdx === 0 || ctx.bot.shouldInteract('PONG')) {
-                   this.pendingClaims.push({ playerIdx: targetIdx, type: 'PONG', priority: 50 });
-               }
-          }
-          // Chow (Left player only)
-          if (targetIdx === (sourceIdx + 1) % 4) {
-              if (MahjongRules.canChow(p.hand, discard)) {
-                   if (targetIdx === 0) { // Bots don't chow in this simplified version
-                       this.pendingClaims.push({ playerIdx: targetIdx, type: 'CHOW', priority: 10 });
+          
+          // If player is in Richii, they cannot Call tiles (except HU)
+          if (!p.info.isRichii) {
+              if (MahjongRules.canKong(p.hand, discard)) {
+                   if (targetIdx === 0 || ctx.bot.shouldInteract('KONG')) {
+                       this.pendingClaims.push({ playerIdx: targetIdx, type: 'KONG', priority: 50 });
                    }
+              } else if (MahjongRules.canPong(p.hand, discard)) {
+                   if (targetIdx === 0 || ctx.bot.shouldInteract('PONG')) {
+                       this.pendingClaims.push({ playerIdx: targetIdx, type: 'PONG', priority: 50 });
+                   }
+              }
+              // Chow (Left player only)
+              if (targetIdx === (sourceIdx + 1) % 4) {
+                  if (MahjongRules.canChow(p.hand, discard)) {
+                       if (targetIdx === 0) { // Bots don't chow in this simplified version
+                           this.pendingClaims.push({ playerIdx: targetIdx, type: 'CHOW', priority: 10 });
+                       }
+                  }
               }
           }
       }
@@ -205,6 +269,23 @@ export class GameplayState implements IGameState {
   }
 
   handleOperation(ctx: IMockContext, action: ActionType) {
+      // Handle Richii Action (It happens during DISCARD state, not RESOLVE state)
+      if (action === 'RICHII') {
+          if (this.turnIdx === 0 && this.subState === 'DISCARD') {
+              const player = ctx.store.players[0];
+              player.info.isRichii = true;
+              
+              const pos = ctx.store.getPlayerPos(0);
+              ctx.socket.trigger('game:effect', { type: 'TEXT', text: '立直!', position: pos, variant: 'GOLD' });
+              ctx.socket.trigger('game:effect', { type: 'LIGHTNING', position: pos });
+              
+              // Remove RICHII from available, force player to discard
+              ctx.store.dto.availableActions = ctx.store.dto.availableActions.filter(a => a !== 'RICHII');
+              this.broadcast(ctx);
+              return; 
+          }
+      }
+
       if (this.subState !== 'RESOLVE') return;
       
       if (action === 'PASS') {
@@ -360,6 +441,7 @@ export class GameplayState implements IGameState {
       if (this.subState === 'RESOLVE') {
           this.handleOperation(ctx, 'PASS');
       } else if (this.turnIdx === 0) {
+          // If waiting for human discard, random discard
           this.performDiscard(ctx, 0, ctx.store.players[0].hand.length - 1);
       } else {
           this.botTurn(ctx);
