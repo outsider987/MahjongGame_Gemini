@@ -44,9 +44,10 @@ export class FlowerState implements IGameState {
           // 1. Remove Flowers from hand
           player.hand = hand.filter((t: Tile) => !isFlower(t));
           
-          // 2. Update Flower Count
+          // 2. Update Flower Data
           const count = flowers.length;
           player.info.flowerCount += count;
+          player.info.flowers.push(...flowers); // Store actual tiles
 
           // 3. Draw Replacements from TAIL of deck (simulate by standard pop for mock)
           // In real implementation, this should pull from deck[0] (tail) if deck is a stack
@@ -59,13 +60,18 @@ export class FlowerState implements IGameState {
 
           // 4. Visual Effects - Show the flowers!
           const pos = ctx.store.getPlayerPos(this.currentIdx);
-          const flowerNames = flowers.map((f: Tile) => this.getFlowerName(f.value)).join(' ');
           
-          ctx.socket.trigger('game:effect', { 
-              type: 'TEXT', 
-              text: `補花: ${flowerNames}`, 
-              position: pos,
-              variant: 'GOLD' 
+          // Trigger TILE_POPUP for each flower
+          flowers.forEach((f: Tile, i: number) => {
+             setTimeout(() => {
+                const name = this.getFlowerName(f.value);
+                ctx.socket.trigger('game:effect', { 
+                    type: 'TILE_POPUP', 
+                    tile: f,
+                    text: `補花: ${name}`, 
+                    position: pos 
+                });
+             }, i * 300); // Stagger effects slightly
           });
           
           // 5. Broadcast update (Frontend sees new Flower Count and Hand)

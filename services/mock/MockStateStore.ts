@@ -37,6 +37,7 @@ export class MockStateStore {
         score: i === 0 ? 2000 : MOCK_PLAYERS[i].score,
         isDealer: false,
         flowerCount: 0,
+        flowers: [], // Init empty
         wind: "",
         seatWind: "",
         isRichii: false,

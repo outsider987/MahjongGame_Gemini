@@ -37,6 +37,7 @@ export interface Player {
   score: number;
   isDealer: boolean; 
   flowerCount: number;
+  flowers: Tile[]; // Specific flower tiles owned
   wind: string;     // The wind assigned to this player (East/South/West/North)
   seatWind: string; // The wind of the seat relative to the dealer
   isRichii: boolean;        // Is the hand locked in Ready state?

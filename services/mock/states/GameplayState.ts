@@ -144,6 +144,8 @@ export class GameplayState implements IGameState {
 
   private handleInGameFlower(ctx: IMockContext, playerIdx: number, flowerTile: Tile) {
       ctx.store.players[playerIdx].info.flowerCount++;
+      ctx.store.players[playerIdx].info.flowers.push(flowerTile); // Store tile
+
       const pos = ctx.store.getPlayerPos(playerIdx);
       const name = this.getFlowerName(flowerTile.value);
       

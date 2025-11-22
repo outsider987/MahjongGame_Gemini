@@ -20,10 +20,10 @@ interface GameCanvasProps {
 const INITIAL_MOCK_STATE: GameStateDTO = {
     deckCount: 144,
     players: [
-        { info: { id: 0, name: "連線中...", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "東", seatWind: "東", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 1, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "南", seatWind: "南", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 2, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "西", seatWind: "西", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
-        { info: { id: 3, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, wind: "北", seatWind: "北", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 0, name: "連線中...", avatar: "", score: 0, isDealer: false, flowerCount: 0, flowers: [], wind: "東", seatWind: "東", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 1, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, flowers: [], wind: "南", seatWind: "南", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 2, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, flowers: [], wind: "西", seatWind: "西", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
+        { info: { id: 3, name: "等待中", avatar: "", score: 0, isDealer: false, flowerCount: 0, flowers: [], wind: "北", seatWind: "北", isRichii: false, richiiDiscardIndex: -1 }, hand: [], handCount: 16, discards: [], melds: [] },
     ],
     turn: 0,
     state: 'WAIT_CONNECTION',
