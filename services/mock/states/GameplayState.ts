@@ -341,8 +341,8 @@ export class GameplayState implements IGameState {
           });
           const meld: Meld = { type: 'PONG', tiles: [discard, discard, discard], fromPlayer };
           player.melds.push(meld);
-          ctx.socket.trigger('game:effect', { type: 'TEXT', text: '碰', position: pos });
-          ctx.socket.trigger('game:effect', { type: 'PARTICLES', variant: 'BLUE', position: pos });
+          // TRIGGER NEW EFFECT
+          ctx.socket.trigger('game:effect', { type: 'ACTION_PONG', text: '碰', position: pos });
 
       } else if (type === 'KONG') {
            // Remove 3 matching
@@ -355,8 +355,8 @@ export class GameplayState implements IGameState {
            });
            const meld: Meld = { type: 'KONG', tiles: [discard, discard, discard, discard], fromPlayer };
            player.melds.push(meld);
-           ctx.socket.trigger('game:effect', { type: 'TEXT', text: '槓', position: pos });
-           ctx.socket.trigger('game:effect', { type: 'PARTICLES', variant: 'PURPLE', position: pos });
+           // TRIGGER NEW EFFECT
+           ctx.socket.trigger('game:effect', { type: 'ACTION_KONG', text: '槓', position: pos });
            
            // Kong gets an extra turn (normally supplement from back, simplified to regular draw here)
       } else if (type === 'CHOW') {
@@ -368,8 +368,8 @@ export class GameplayState implements IGameState {
                 });
                 const meldTiles = [...combo, discard].sort((a, b) => a.value - b.value);
                 player.melds.push({ type: 'CHOW', tiles: meldTiles, fromPlayer });
-                ctx.socket.trigger('game:effect', { type: 'TEXT', text: '吃', position: pos });
-                ctx.socket.trigger('game:effect', { type: 'PARTICLES', variant: 'GREEN', position: pos });
+                // TRIGGER NEW EFFECT
+                ctx.socket.trigger('game:effect', { type: 'ACTION_CHOW', text: '吃', position: pos });
            }
       }
 
@@ -404,7 +404,7 @@ export class GameplayState implements IGameState {
   private executeWin(ctx: IMockContext, playerIdx: number, isTsumo: boolean) {
       const pos = ctx.store.getPlayerPos(playerIdx);
       ctx.socket.trigger('game:effect', { type: 'SHOCKWAVE', variant: 'HU', position: pos });
-      ctx.socket.trigger('game:effect', { type: 'TEXT', text: isTsumo ? '自摸!' : '胡了!', position: pos });
+      ctx.socket.trigger('game:effect', { type: 'TEXT', text: isTsumo ? '自摸!' : '胡了!', position: pos, variant: 'HU' });
       ctx.socket.trigger('game:effect', { type: 'PARTICLES', variant: 'HU', position: pos });
       
       this.endGame(ctx, isTsumo ? `玩家 ${playerIdx} 自摸` : `玩家 ${playerIdx} 胡牌`);

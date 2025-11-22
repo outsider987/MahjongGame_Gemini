@@ -16,7 +16,8 @@ export class RenderService {
     globalScale: number, 
     hoveredTileIndex: number,
     selectedTileIndex: number,
-    animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; lastStateChangeTime: number; }
+    animation: { lastTurnTime: number; lastDiscardTime: number; discardingPlayer: number; lastStateChangeTime: number; },
+    camera: { shake: number }
   ): RenderMetrics {
     
     const ctx: RenderContext = {
@@ -26,7 +27,8 @@ export class RenderService {
       height: p.height,
       hoveredTileIndex,
       selectedTileIndex,
-      animation
+      animation,
+      camera
     };
 
     // 0. INIT STATE OVERRIDE

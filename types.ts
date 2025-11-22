@@ -85,7 +85,7 @@ export interface RoomSettings {
 
 export interface VisualEffect {
   id: number;
-  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP';
+  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP' | 'ACTION_CHOW' | 'ACTION_PONG' | 'ACTION_KONG';
   variant?: string; // e.g., 'HU', 'GOLD', 'BLUE', 'FIRE'
   text?: string;
   tile?: Tile; // For TILE_POPUP

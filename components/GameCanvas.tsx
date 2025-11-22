@@ -54,6 +54,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const hoveredTileRef = useRef<number>(-1);
   const selectedTileRef = useRef<number>(-1);
 
+  // Camera Shake
+  const cameraRef = useRef({ shake: 0 });
+
   // UI State (React managed)
   const [activePlayerIndex, setActivePlayerIndex] = useState(0);
   const [availableActions, setAvailableActions] = useState<ActionType[]>([]);
@@ -128,52 +131,69 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
 
   // --- Effect System ---
-  const triggerEffect = (type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP', text?: string, x?: number, y?: number, variant?: string, tile?: Tile) => {
+  const triggerEffect = (type: string, text?: string, x?: number, y?: number, variant?: string, tile?: Tile) => {
       const centerX = window.innerWidth / 2;
       const centerY = window.innerHeight / 2;
       
+      let particles: any[] | undefined = undefined;
+      let life = 60;
+
+      // Config based on type
+      if (type === 'LIGHTNING') life = 20;
+      else if (type === 'SHOCKWAVE') life = 45;
+      else if (type === 'ACTION_KONG') life = 60;
+      
+      // Create Specific Particles
+      if (type === 'PARTICLES' || type === 'ACTION_CHOW' || type === 'ACTION_PONG' || type === 'ACTION_KONG') {
+          particles = createParticles(x || centerX, y || centerY, type as any, variant);
+      }
+
       effectsRef.current.push({
           id: Date.now() + Math.random(),
-          type,
+          type: type as any,
           variant,
           text,
           tile,
           x: x || centerX,
           y: y || centerY,
-          life: type === 'LIGHTNING' ? 20 : (type === 'SHOCKWAVE' ? 45 : 60),
-          particles: type === 'PARTICLES' ? createParticles(x || centerX, y || centerY, variant) : undefined
+          life,
+          particles
       });
   };
 
-  const createParticles = (x: number, y: number, variant?: string) => {
+  const createParticles = (x: number, y: number, type: string, variant?: string) => {
       const pArr = [];
       let count = 30;
-      // Default Gold
       let colors = ['#fbbf24', '#f59e0b', '#ffffff']; 
       let speedBase = 8;
-      let spread = Math.PI * 2;
+      let shape: 'CIRCLE' | 'RECT' | 'TRIANGLE' = 'CIRCLE';
 
       if (variant === 'HU') {
           count = 150;
-          colors = ['#ef4444', '#f87171', '#fbbf24', '#ffffff']; // Red & Gold
+          colors = ['#ef4444', '#f87171', '#fbbf24', '#ffffff']; 
           speedBase = 20;
-      } else if (variant === 'BLUE') { // PONG
-          count = 50;
-          colors = ['#3b82f6', '#60a5fa', '#93c5fd', '#ffffff']; 
-          speedBase = 12;
-      } else if (variant === 'PURPLE') { // KONG
-          count = 60;
-          colors = ['#a855f7', '#c084fc', '#e9d5ff', '#ffffff'];
-          speedBase = 15;
-      } else if (variant === 'GREEN') { // CHOW
+      } else if (type === 'ACTION_CHOW' || variant === 'GREEN') { 
+          // Crumb particles
           count = 40;
-          colors = ['#10b981', '#34d399', '#6ee7b7'];
+          colors = ['#10b981', '#34d399', '#fbbf24']; // Green + Gold crumbs
           speedBase = 10;
+          shape = 'RECT'; 
+      } else if (type === 'ACTION_PONG' || variant === 'BLUE') { 
+          // Debris
+          count = 50;
+          colors = ['#3b82f6', '#60a5fa', '#93c5fd']; 
+          speedBase = 12;
+          shape = 'TRIANGLE';
+      } else if (type === 'ACTION_KONG' || variant === 'PURPLE') { 
+          // Dust/Rocks
+          count = 60;
+          colors = ['#a855f7', '#c084fc', '#581c87'];
+          speedBase = 15;
+          shape = 'CIRCLE';
       }
 
       for(let i=0; i<count; i++) {
-          const angle = Math.random() * spread;
-          // Explosion power
+          const angle = Math.random() * Math.PI * 2;
           const power = Math.random() * speedBase + (Math.random() * speedBase * 0.5); 
           
           pArr.push({
@@ -185,9 +205,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
               color: colors[Math.floor(Math.random() * colors.length)],
               size: 5 + Math.random() * 10,
               gravity: 0.2 + Math.random() * 0.2,
-              drag: 0.94, // Friction
+              drag: 0.94, 
               rotation: Math.random() * Math.PI,
-              vRot: (Math.random() - 0.5) * 0.2
+              vRot: (Math.random() - 0.5) * 0.2,
+              shape // Pass shape to renderer
           });
       }
       return pArr;
@@ -214,7 +235,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       p.setup = () => {
         const canvas = p.createCanvas(window.innerWidth, window.innerHeight);
         canvas.parent(renderRef.current!);
-        p.frameRate(60); // Higher frame rate for smooth particles
+        p.frameRate(60); 
         p.textFont("'Noto Serif TC', 'Roboto', serif");
         AssetLoader.generateAll(p);
       };
@@ -226,23 +247,40 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       p.draw = () => {
         globalScale = Math.min(1.2, Math.max(0.6, p.width / 1280));
         
+        // Apply Screen Shake Decay
+        if (cameraRef.current.shake > 0) {
+            cameraRef.current.shake *= 0.9; // Decay
+            if (cameraRef.current.shake < 0.5) cameraRef.current.shake = 0;
+        }
+
+        p.push();
+        
+        // Apply Shake Translation
+        if (cameraRef.current.shake > 0) {
+            const amt = cameraRef.current.shake;
+            const sx = p.random(-amt, amt);
+            const sy = p.random(-amt, amt);
+            p.translate(sx, sy);
+        }
+
         const renderState = {
             ...gameRef.current,
             effects: effectsRef.current
         };
 
-        // Update Input Hover
         updateHitTest(p, globalScale);
 
-        // Draw
         hitTestMetrics.current = RenderService.drawScene(
           p, 
           renderState, 
           globalScale, 
           hoveredTileRef.current,
           selectedTileRef.current,
-          animState.current
+          animState.current,
+          cameraRef.current // Pass camera object for effects to modify
         );
+
+        p.pop(); // Restore from shake
       };
 
       p.mousePressed = () => {

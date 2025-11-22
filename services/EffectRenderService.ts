@@ -7,7 +7,10 @@ import {
   LightningEffectRenderer, 
   ParticleEffectRenderer, 
   ShockwaveEffectRenderer, 
-  TilePopupRenderer 
+  TilePopupRenderer,
+  ChowEffectRenderer,
+  PongEffectRenderer,
+  KongEffectRenderer
 } from './EffectStrategies';
 
 export class EffectRenderService {
@@ -17,7 +20,10 @@ export class EffectRenderService {
       'LIGHTNING': new LightningEffectRenderer(),
       'PARTICLES': new ParticleEffectRenderer(),
       'SHOCKWAVE': new ShockwaveEffectRenderer(),
-      'TILE_POPUP': new TilePopupRenderer()
+      'TILE_POPUP': new TilePopupRenderer(),
+      'ACTION_CHOW': new ChowEffectRenderer(),
+      'ACTION_PONG': new PongEffectRenderer(),
+      'ACTION_KONG': new KongEffectRenderer()
   };
 
   static drawEffects(ctx: RenderContext, effects: VisualEffect[]) {
