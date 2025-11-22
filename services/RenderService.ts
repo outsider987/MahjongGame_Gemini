@@ -81,7 +81,8 @@ export class RenderService {
   private static drawTableInfo({ p, globalScale }: RenderContext, deckCount: number) {
     p.push();
     p.scale(globalScale);
-    p.translate(24, 90);
+    // Moved up slightly to avoid overlapping left player area on mobile
+    p.translate(20, 60);
     p.fill(0, 0, 0, 80);
     p.stroke(COLORS.UI_BORDER_GOLD);
     p.rect(0, 0, 180, 80, 12);
@@ -101,26 +102,30 @@ export class RenderService {
 
   private static drawCenterCompass({ p, width, height, globalScale }: RenderContext, game: any) {
     p.push();
-    p.translate(width/2, height/2 - 20 * globalScale);
+    // Perfectly centered for symmetry
+    p.translate(width/2, height/2);
     p.scale(globalScale);
-    const boxSize = 120;
+    
+    // Reduced size to allow River to be closer to center
+    const boxSize = 90; 
+    
     p.fill(0, 0, 0, 200);
     p.stroke(COLORS.UI_BORDER_GOLD);
     p.strokeWeight(2);
     p.rectMode(p.CENTER);
-    p.rect(0, 0, boxSize, boxSize, 24);
+    p.rect(0, 0, boxSize, boxSize, 20);
     
     const timeLeft = Math.ceil(game.actionTimer / 30);
     const isInterrupt = game.state === 'INTERRUPT';
     
     p.noStroke();
     p.textAlign(p.CENTER, p.CENTER);
-    p.textSize(40);
+    p.textSize(32); // Slightly smaller text
     p.fill(isInterrupt ? '#fbbf24' : COLORS.CYAN_LED);
     p.text(isInterrupt ? "!" : timeLeft, 0, 0);
 
     const turn = game.turn;
-    const offset = boxSize/2 - 20;
+    const offset = boxSize/2 - 15;
     const positions = [
        { label: '南', x: 0, y: offset, idx: 0 }, 
        { label: '西', x: offset, y: 0, idx: 1 }, 
@@ -136,11 +141,11 @@ export class RenderService {
            ctx.shadowBlur = 15;
            ctx.shadowColor = '#fbbf24';
            p.fill('#fbbf24');
-           p.textSize(24);
+           p.textSize(20);
         } else {
            ctx.shadowBlur = 0;
            p.fill(255, 255, 255, 50);
-           p.textSize(18);
+           p.textSize(14);
         }
         p.textStyle(p.BOLD);
         p.text(pos.label, 0, 0);
@@ -157,7 +162,9 @@ export class RenderService {
      // Base Config
      const BASE_TILE_W = 44;
      const BASE_TILE_H = 60;
-     const BASE_BOTTOM_OFFSET = 130;
+     
+     // Reduced bottom offset to push hands lower and avoid river collision
+     const BASE_BOTTOM_OFFSET = 100; 
 
      // Scaled Metrics
      const TILE_W = BASE_TILE_W * s;
@@ -170,7 +177,7 @@ export class RenderService {
      const SIDE_TILE_W = 20 * s; 
      
      const P0_MARGIN_RIGHT = 160 * s;
-     const SIDE_MARGIN_BOTTOM = 180 * s;
+     const SIDE_MARGIN_BOTTOM = 150 * s; // Slightly adjusted
      const BOTTOM_Y = BASE_BOTTOM_OFFSET * s;
 
      const handLen = player.hand.length;
@@ -210,7 +217,7 @@ export class RenderService {
 
      } else if (index === 1) {
          // Right
-         p.translate(width - (140 * s), 0);
+         p.translate(width - (110 * s), 0); // Moved slightly closer to edge
          p.rotate(p.HALF_PI);
          
          let startY = (height - totalSize) / 2;
@@ -227,7 +234,7 @@ export class RenderService {
          
      } else if (index === 2) {
          // Top
-         p.translate(width, 100 * s);
+         p.translate(width, 80 * s); // Moved higher up
          p.rotate(p.PI);
          const startX = (width - totalSize) / 2;
          
@@ -240,7 +247,7 @@ export class RenderService {
 
      } else if (index === 3) {
          // Left
-         p.translate(140 * s, height);
+         p.translate(110 * s, height); // Moved closer to edge
          p.rotate(-p.HALF_PI); 
          
          let startY = (height - totalSize) / 2;
@@ -307,23 +314,26 @@ export class RenderService {
       const { p, width, height, globalScale } = ctx;
       p.push();
       
-      const w = 34 * globalScale; 
-      const h = 46 * globalScale; 
+      // Compact sizes for discards to prevent overlapping hands on mobile
+      const w = 30 * globalScale; 
+      const h = 39 * globalScale; 
       const cols = 6; 
-      const RIVER_OFFSET = 120 * globalScale;
+      // Significantly reduced offset to pull river toward center
+      const RIVER_OFFSET = 68 * globalScale; 
 
       p.translate(width/2, height/2);
       
       if (index === 0) p.translate(0, RIVER_OFFSET);
-      if (index === 1) { p.translate(RIVER_OFFSET + (40*globalScale), 0); p.rotate(-p.HALF_PI); }
+      if (index === 1) { p.translate(RIVER_OFFSET + (20*globalScale), 0); p.rotate(-p.HALF_PI); }
       if (index === 2) { p.translate(0, -RIVER_OFFSET); p.rotate(p.PI); }
-      if (index === 3) { p.translate(-RIVER_OFFSET - (40*globalScale), 0); p.rotate(p.HALF_PI); }
+      if (index === 3) { p.translate(-RIVER_OFFSET - (20*globalScale), 0); p.rotate(p.HALF_PI); }
       
       const startX = -(cols * w) / 2;
       tiles.forEach((tile: Tile, i: number) => {
           const r = Math.floor(i / cols);
           const c = i % cols;
-          this.drawTile(p, startX + c*w, r*(h-(6*globalScale)), tile, w, h, 'FLAT', globalScale);
+          // Reduced vertical gap slightly
+          this.drawTile(p, startX + c*w, r*(h-(5*globalScale)), tile, w, h, 'FLAT', globalScale);
       });
       p.pop();
   }
