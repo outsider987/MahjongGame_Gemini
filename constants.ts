@@ -1,6 +1,4 @@
 
-
-
 export const COLORS = {
   // Screenshot Palette
   TABLE_BG_DARK: '#052e23', // Deep Emerald
@@ -11,25 +9,25 @@ export const COLORS = {
   UI_GLASS_LIGHT: 'rgba(255, 255, 255, 0.1)',
   UI_BORDER_GOLD: '#d4af37',
   
-  // Realistic Material Colors
+  // Realistic Material Colors - Updated for "Premium" feel
   // Jade Backing
-  TILE_JADE_DEEP: '#022c22',  // Darkest shadow
-  TILE_JADE_MAIN: '#047857',  // Base color
-  TILE_JADE_LIGHT: '#10b981', // Subsurface light
+  TILE_JADE_DEEP: '#064e3b',   // Darker, richer teal
+  TILE_JADE_MAIN: '#059669',   // Vibrant Emerald
+  TILE_JADE_LIGHT: '#34d399',  // Translucent glow
   
-  // Bone/Ivory Face
-  TILE_BONE_WARM: '#fcfbf7',  // Main face color (slightly cream)
-  TILE_BONE_SHADOW: '#e2e8f0', // Edges/Shadows
-  TILE_BONE_HIGHLIGHT: '#ffffff', // Specular
+  // Bone/Ivory Face - Updated for smooth porcelain look
+  TILE_BONE_WARM: '#fdfcf5',   // Very light warm cream (Porcelain)
+  TILE_BONE_SHADOW: '#e2e8f0', // Cool grey shadow for contrast
+  TILE_BONE_HIGHLIGHT: '#ffffff', // Pure white specular
   
   // Lighting
-  SHADOW_DROP: 'rgba(0,0,0,0.6)',
-  SHADOW_AMBIENT: 'rgba(0,0,0,0.3)',
-  HIGHLIGHT_SPECULAR: 'rgba(255,255,255,0.7)',
-  HIGHLIGHT_EDGE: 'rgba(255,255,255,0.4)',
+  SHADOW_DROP: 'rgba(0,0,0,0.5)',
+  SHADOW_AMBIENT: 'rgba(0,0,0,0.25)',
+  HIGHLIGHT_SPECULAR: 'rgba(255,255,255,0.9)',
+  HIGHLIGHT_EDGE: 'rgba(255,255,255,0.6)',
   
   // Split View Section Colors
-  TILE_SECTION_BONE: '#f1f5f9', 
+  TILE_SECTION_BONE: '#f8fafc', 
   TILE_SECTION_BAMBOO: '#065f46', 
   TILE_SECTION_BAMBOO_LIGHT: '#059669', 
   

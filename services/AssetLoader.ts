@@ -1,5 +1,4 @@
 
-
 import { Suit, Tile } from '../types';
 
 export class AssetLoader {
@@ -81,22 +80,34 @@ export class AssetLoader {
       const h = 320;
       const g = p.createGraphics(w, h);
       
+      // Fill transparent base
+      g.clear();
       g.noStroke();
-      // Subtle Perlin noise for organic imperfection
-      for(let x=0; x<w; x+=4) {
-          for(let y=0; y<h; y+=4) {
-              const n = p.noise(x*0.02, y*0.02);
-              const alpha = p.map(n, 0, 1, 0, 15); // Very subtle
-              g.fill(0, 0, 0, alpha);
-              g.rect(x, y, 4, 4);
-              
-              // Occasional "grain" line
-              if (p.random() > 0.99) {
-                   g.fill(139, 69, 19, 10); // Faint brown grain
-                   g.rect(x, y, p.random(10, 30), 2);
-              }
-          }
+      
+      // Create extremely subtle, high-frequency noise (dust)
+      // Instead of blocks, use tiny points
+      const density = 8000;
+      for(let i=0; i<density; i++) {
+          const x = Math.random() * w;
+          const y = Math.random() * h;
+          const size = Math.random() * 1.5;
+          const alpha = Math.random() * 8; // Very faint (0-8 out of 255)
+          
+          g.fill(0, 0, 0, alpha);
+          g.circle(x, y, size);
       }
+
+      // Add faint "scratches" or organic flow
+      g.noFill();
+      g.stroke(0, 0, 0, 3);
+      g.strokeWeight(1);
+      for(let i=0; i<20; i++) {
+          const x = Math.random() * w;
+          const y = Math.random() * h;
+          const len = Math.random() * 50;
+          g.line(x, y, x + len, y + Math.random() * 10);
+      }
+
       return g;
   }
 
@@ -177,8 +188,6 @@ export class AssetLoader {
         }
     };
 
-    // Map layouts (Simplified for brevity, similar to logic in prev impl but scaled)
-    // Reusing logic structure but adapting scales
     const yStep = 35 * S;
     const xStep = 30 * S;
 
