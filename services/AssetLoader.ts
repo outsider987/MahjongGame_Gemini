@@ -80,32 +80,61 @@ export class AssetLoader {
       const h = 320;
       const g = p.createGraphics(w, h);
       
-      // Fill transparent base
       g.clear();
       g.noStroke();
       
-      // Create extremely subtle, high-frequency noise (dust)
-      // Instead of blocks, use tiny points
-      const density = 8000;
+      // 1. Large scale "Cloudy" density variations (Watermarks)
+      // Use p5 noise for organic, uneven patches found in natural bone/ivory
+      for (let x = 0; x < w; x+=4) {
+          for (let y = 0; y < h; y+=4) {
+              // Low frequency noise for soft clouds
+              const n = p.noise(x * 0.008, y * 0.008);
+              
+              // Only darken areas where noise matches a threshold
+              if (n > 0.45) {
+                  // Very subtle alpha (0 to 5 out of 255)
+                  const alpha = p.map(n, 0.45, 1, 0, 5);
+                  g.fill(40, 40, 30, alpha); // Slightly warm dark grey
+                  g.rect(x, y, 4.5, 4.5); // Slight overlap to prevent gaps
+              }
+          }
+      }
+      
+      // 2. Fine Grain (Pores / Dust)
+      // High frequency imperfections
+      const density = 5000;
       for(let i=0; i<density; i++) {
           const x = Math.random() * w;
           const y = Math.random() * h;
-          const size = Math.random() * 1.5;
-          const alpha = Math.random() * 8; // Very faint (0-8 out of 255)
+          const size = Math.random() * 1.4;
+          const alpha = Math.random() * 7; // Faint
           
           g.fill(0, 0, 0, alpha);
           g.circle(x, y, size);
       }
 
-      // Add faint "scratches" or organic flow
+      // 3. Organic Micro-scratches
+      // Simulates surface wear direction
       g.noFill();
-      g.stroke(0, 0, 0, 3);
-      g.strokeWeight(1);
-      for(let i=0; i<20; i++) {
+      for(let i=0; i<15; i++) {
           const x = Math.random() * w;
           const y = Math.random() * h;
-          const len = Math.random() * 50;
-          g.line(x, y, x + len, y + Math.random() * 10);
+          const len = 5 + Math.random() * 35;
+          const angle = Math.random() * Math.PI * 2;
+          
+          g.stroke(0, 0, 0, Math.random() * 5); // Extremely faint
+          g.strokeWeight(Math.random() * 0.6 + 0.1);
+          
+          g.beginShape();
+          g.vertex(x, y);
+          // Quadratic curve for organic feel
+          const cpX = x + Math.cos(angle) * len * 0.5 + (Math.random()-0.5)*5;
+          const cpY = y + Math.sin(angle) * len * 0.5 + (Math.random()-0.5)*5;
+          const endX = x + Math.cos(angle) * len;
+          const endY = y + Math.sin(angle) * len;
+          
+          g.quadraticVertex(cpX, cpY, endX, endY);
+          g.endShape();
       }
 
       return g;
