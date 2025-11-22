@@ -12,7 +12,9 @@ export class PlayerRenderService {
      const s = globalScale;
      const BASE_TILE_W = 46;
      const BASE_TILE_H = 64;
-     const BASE_BOTTOM_OFFSET = 90; 
+     
+     // Increased Bottom Offset to avoid overlapping with mobile home bars / browser UI
+     const BASE_BOTTOM_OFFSET = 120; 
 
      // Scaled Metrics
      const TILE_W = BASE_TILE_W * s;
@@ -35,54 +37,79 @@ export class PlayerRenderService {
      const visualHandCount = index === 0 ? handLen : (player.handCount || 0);
      const hasNew = visualHandCount % 3 === 2;
      
-     const tileWidthInHand = (index === 1 || index === 3) ? SIDE_TILE_THICKNESS : TILE_W;
-     const handSizePx = (visualHandCount * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
-     
      const melds = player.melds || [];
      const meldSizePx = melds.reduce((acc: number, m: any) => {
         return acc + ((m?.tiles?.length || 0) * MELD_W) + MELD_GAP;
      }, 0);
      
-     // Calculate Layout Size
-     const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
-     
+     // Default metrics (updated for P0)
      let p0StartX = 0;
+     let p0EffectiveTileW = TILE_W;
 
      // Layout Logic
      if (index === 0) { 
          // Self (Bottom)
          p.translate(0, height - BOTTOM_Y);
          
-         let startX = (width - mainGroupSize) / 2;
-         const endX = startX + mainGroupSize;
-         const limitX = width - P0_MARGIN_RIGHT;
-         if (endX > limitX) startX = limitX - mainGroupSize;
-         if (startX < 20 * s) startX = 20 * s;
+         const tileWidthInHand = TILE_W;
+         const handSizePx = (visualHandCount * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
+         const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
+         
+         // --- Mobile Fit Logic ---
+         // If hand is wider than screen, scale it down locally to fit
+         const safeMargin = 20 * s;
+         const maxW = width - (safeMargin * 2);
+         let fitScale = 1;
+         
+         if (mainGroupSize > maxW) {
+             fitScale = maxW / mainGroupSize;
+         }
 
-         this.drawHandSequence(ctx, hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE, isActive);
+         // Update effective dimensions for drawing and hit testing
+         const EFF_TILE_W = TILE_W * fitScale;
+         const EFF_TILE_H = TILE_H * fitScale;
+         const EFF_MELD_W = MELD_W * fitScale;
+         const EFF_MELD_H = MELD_H * fitScale;
+         const EFF_GAP_NEW = GAP_NEW_TILE * fitScale;
+         const EFF_GAP_MELD_GRP = GAP_HAND_MELD * fitScale;
+         const EFF_GAP_MELD = MELD_GAP * fitScale;
+         
+         const effHandSize = (visualHandCount * EFF_TILE_W) + (hasNew ? EFF_GAP_NEW : 0);
+         const effTotalSize = effHandSize + (meldSizePx > 0 ? EFF_GAP_MELD_GRP + (meldSizePx * fitScale) : 0);
+
+         let startX = (width - effTotalSize) / 2;
+         const endX = startX + effTotalSize;
+         const limitX = width - (P0_MARGIN_RIGHT * fitScale); // Scale margin too
+         
+         // If room permits, offset to left to avoid UI buttons on right, but keep centered on small screens
+         if (fitScale === 1 && endX > limitX) startX = limitX - effTotalSize;
+         if (startX < safeMargin) startX = safeMargin;
+
+         // Draw Hand with effective sizes
+         this.drawHandSequence(ctx, hand, startX, 0, EFF_TILE_W, EFF_TILE_H, 1, 'STANDING', hasNew, 0, EFF_GAP_NEW, isActive, fitScale);
          
          if (melds.length > 0) {
-            const meldStartX = startX + handSizePx + GAP_HAND_MELD;
-            this.drawMelds(ctx, melds, meldStartX, 20 * s, MELD_W, MELD_H, 1, MELD_GAP);
+            const meldStartX = startX + effHandSize + EFF_GAP_MELD_GRP;
+            this.drawMelds(ctx, melds, meldStartX, 20 * s * fitScale, EFF_MELD_W, EFF_MELD_H, 1, EFF_GAP_MELD);
          }
 
          p0StartX = startX;
+         p0EffectiveTileW = EFF_TILE_W;
 
      } else if (index === 1) {
          // Right Player
+         const handSizePx = (visualHandCount * SIDE_TILE_THICKNESS) + (hasNew ? GAP_NEW_TILE : 0);
+         const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
+         
          p.translate(width - (100 * s), 0); 
-         p.rotate(p.HALF_PI); // Rotate 90 deg CW. X is Down, Y is Left.
+         p.rotate(p.HALF_PI); 
          
-         // Center vertically
          let startY = (height - mainGroupSize) / 2;
-         
-         // Adjust to not hit bottom UI
          const endY = startY + mainGroupSize;
          const limitY = height - SIDE_MARGIN_BOTTOM;
          if (endY > limitY) startY = limitY - mainGroupSize;
 
          const dummyHand = Array(visualHandCount).fill(null);
-         // Draw Tiles
          this.drawHandSequence(ctx, dummyHand, startY, 0, SIDE_TILE_THICKNESS, TILE_H, 1, 'SIDE_STANDING_R', hasNew, 1, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
@@ -92,6 +119,9 @@ export class PlayerRenderService {
          
      } else if (index === 2) {
          // Top Player
+         const handSizePx = (visualHandCount * TILE_W) + (hasNew ? GAP_NEW_TILE : 0);
+         const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
+
          p.translate(width, 80 * s); 
          p.rotate(p.PI);
          const startX = (width - mainGroupSize) / 2;
@@ -106,8 +136,11 @@ export class PlayerRenderService {
 
      } else if (index === 3) {
          // Left Player
+         const handSizePx = (visualHandCount * SIDE_TILE_THICKNESS) + (hasNew ? GAP_NEW_TILE : 0);
+         const mainGroupSize = handSizePx + (meldSizePx > 0 ? GAP_HAND_MELD + meldSizePx : 0);
+
          p.translate(100 * s, height); 
-         p.rotate(-p.HALF_PI); // Rotate -90. X is Up. Y is Right.
+         p.rotate(-p.HALF_PI); 
          
          let startY = (height - mainGroupSize) / 2;
          const endY = startY + mainGroupSize;
@@ -115,11 +148,9 @@ export class PlayerRenderService {
          if (endY > limitY) startY = limitY - mainGroupSize;
 
          const dummyHand = Array(visualHandCount).fill(null);
-         
          const fullLen = (visualHandCount * SIDE_TILE_THICKNESS) + (hasNew ? GAP_NEW_TILE : 0);
          const endPos = startY + fullLen;
          
-         // Custom Reverse Loop for Left Player Hand
          this.drawLeftHandReverse(ctx, dummyHand, endPos, 0, SIDE_TILE_THICKNESS, TILE_H, hasNew, GAP_NEW_TILE, isActive);
          
          if (melds.length > 0) {
@@ -129,7 +160,7 @@ export class PlayerRenderService {
      }
      p.pop();
 
-     return { p0HandStartX: p0StartX, p0TileW: TILE_W };
+     return { p0HandStartX: p0StartX, p0TileW: p0EffectiveTileW };
   }
 
   static drawDiscards(ctx: RenderContext, player: any, index: number) {
@@ -170,7 +201,7 @@ export class PlayerRenderService {
           // 1. Move to Destination
           p.translate(destX, destY);
           
-          // 2. Animation Calculation (Before Riichi rotation so trajectory is relative to table)
+          // 2. Animation Calculation
           let animScale = 1;
           const isLastDiscard = (i === tiles.length - 1);
           
@@ -180,55 +211,42 @@ export class PlayerRenderService {
                
                if (elapsed < dur) {
                    const t = elapsed / dur;
-                   // Cubic Ease Out
                    const ease = 1 - Math.pow(1 - t, 3);
 
-                   // Origin: Roughly where the player's hand is in this local space
-                   // Local Y+ is towards player/hand. Hand is further down.
                    const originX = 0; 
                    const originY = 220 * globalScale; 
 
-                   // Vector from Dest to Origin (Backward vector)
                    const vX = originX - destX;
                    const vY = originY - destY;
                    
-                   // Interpolate: Current Position = Dest + (Vector * (1-ease))
                    const currX = vX * (1 - ease);
                    const currY = vY * (1 - ease);
                    
                    p.translate(currX, currY);
                    
-                   // Arc (Z-axis simulated by Y offset + Scale)
                    const arcH = 150 * globalScale;
                    const z = Math.sin(t * Math.PI) * arcH;
                    p.translate(0, -z);
                    
-                   // Scale
                    animScale = 1.4 - (0.4 * ease);
                    
-                   // Spin
                    const spins = 2;
                    const rot = (1 - ease) * Math.PI * 2 * spins;
                    p.rotate(rot);
 
                } else if (elapsed < dur + 150) {
-                   // Bounce Effect upon landing
                    const landT = (elapsed - dur) / 150;
                    const bounceH = 10 * globalScale * Math.sin(landT * Math.PI);
                    p.translate(0, -bounceH);
                }
           }
 
-          // 3. Apply Scale
           p.scale(animScale);
           
-          // 4. Riichi Rotation (Local to tile)
           if (isRichiiTile) {
-             // Pivot center
              p.translate(w/2, h/2);
              p.rotate(p.HALF_PI);
              p.translate(-w/2, -h/2);
-             // Center in slot (since w!=h)
              p.translate((h-w)/2, 0);
           }
           
@@ -242,65 +260,40 @@ export class PlayerRenderService {
   private static drawHandSequence(
       ctx: RenderContext, hand: Tile[], startX: number, y: number, w: number, h: number, 
       dir: 1 | -1, type: string, 
-      hasNewTile: boolean, playerIdx: number, newTileGap: number, isActive: boolean
+      hasNewTile: boolean, playerIdx: number, newTileGap: number, isActive: boolean, fitScale: number = 1
   ) {
       const { p, globalScale, hoveredTileIndex, selectedTileIndex, animation } = ctx;
       const count = hand.length;
       const gapIndex = hasNewTile ? count - 1 : -1;
       
       let cx = startX;
+      
+      // Store selected tile for drawing last (on top)
+      let selectedTileParams: any = null;
+
       for (let i = 0; i < count; i++) {
           if (i === gapIndex) cx += (newTileGap * dir);
           const drawX = dir === 1 ? cx : cx - w;
           let renderY = y;
           
+          // Check for Selection (Player 0 Only)
+          // If selected, we skip drawing it in this loop pass
+          if (playerIdx === 0 && i === selectedTileIndex) {
+              selectedTileParams = { i, tile: hand[i], drawX, renderY };
+              cx += (w * dir); // Advance cursor
+              continue; // Skip draw
+          }
+
           p.push();
           p.translate(drawX, renderY);
 
-          // --- SELECTION & HOVER LOGIC (Self Only) ---
-          if (playerIdx === 0) {
-              const isSelected = (i === selectedTileIndex);
-              const isHovered = (i === hoveredTileIndex);
-              
-              if (isSelected) {
-                  const liftAmount = 30 * globalScale;
-                  p.translate(0, -liftAmount);
-                  
-                  // Selection Glow (Back)
-                  p.push();
-                  p.drawingContext.shadowColor = "#fbbf24";
-                  p.drawingContext.shadowBlur = 25;
-                  p.noFill();
-                  p.stroke('#fbbf24');
-                  p.strokeWeight(2);
-                  p.rect(0, 0, w, h, 4);
-                  p.pop();
-
-                  // Arrow Indicator
-                  p.push();
-                  p.translate(w/2, -25 * globalScale);
-                  // Bounce arrow
-                  const bounce = Math.sin(p.frameCount * 0.2) * 5 * globalScale;
-                  p.translate(0, bounce);
-                  
-                  p.fill('#fbbf24');
-                  p.stroke(0);
-                  p.strokeWeight(1);
-                  // Upside down triangle
-                  p.triangle(
-                      -8 * globalScale, -8 * globalScale, 
-                      8 * globalScale, -8 * globalScale, 
-                      0, 4 * globalScale
-                  );
-                  p.pop();
-
-              } else if (isHovered) {
-                  const liftAmount = 10 * globalScale;
-                  p.translate(0, -liftAmount);
-              }
+          // HOVER LOGIC (Self Only) - Hover is subtle, can be drawn in order
+          if (playerIdx === 0 && i === hoveredTileIndex) {
+               const liftAmount = 10 * globalScale * fitScale;
+               p.translate(0, -liftAmount);
           }
 
-          // DRAW ANIMATION (Flip Up for new tile)
+          // NEW TILE ANIMATION
           const isLastTile = (i === count - 1);
           if (hasNewTile && isLastTile && isActive) {
               const dur = 400; 
@@ -310,7 +303,6 @@ export class PlayerRenderService {
                   const ease = 1 - (1 - t) * (1 - t);
                   const dropY = 30 * globalScale * (1 - ease);
                   const scaleY = 0.1 + (0.9 * ease);
-                  
                   p.translate(0, dropY);
                   p.scale(1, scaleY);
               }
@@ -322,6 +314,48 @@ export class PlayerRenderService {
 
           cx += (w * dir);
       }
+
+      // DRAW SELECTED TILE LAST (On Top)
+      if (selectedTileParams) {
+          const { tile, drawX, renderY } = selectedTileParams;
+          p.push();
+          p.translate(drawX, renderY);
+          
+          const liftAmount = 30 * globalScale * fitScale;
+          p.translate(0, -liftAmount);
+          
+          // Selection Glow (Behind)
+          p.push();
+          p.drawingContext.shadowColor = "#fbbf24";
+          p.drawingContext.shadowBlur = 25;
+          p.noFill();
+          p.stroke('#fbbf24');
+          p.strokeWeight(2);
+          p.rect(0, 0, w, h, 4);
+          p.pop();
+
+          // Arrow Indicator
+          p.push();
+          p.translate(w/2, -25 * globalScale * fitScale);
+          const bounce = Math.sin(p.frameCount * 0.2) * 5 * globalScale;
+          p.translate(0, bounce);
+          
+          p.fill('#fbbf24');
+          p.stroke(0);
+          p.strokeWeight(1);
+          p.triangle(
+              -8 * globalScale * fitScale, -8 * globalScale * fitScale, 
+              8 * globalScale * fitScale, -8 * globalScale * fitScale, 
+              0, 4 * globalScale * fitScale
+          );
+          p.pop();
+
+          // Draw Tile
+          // @ts-ignore
+          TileRenderService.drawTile(p, 0, 0, tile, w, h, type, globalScale);
+
+          p.pop();
+      }
   }
 
   private static drawLeftHandReverse(
@@ -330,22 +364,19 @@ export class PlayerRenderService {
   ) {
       const { p, globalScale, animation } = ctx;
       const count = hand.length;
-      
       let cx = endX; 
       
       for (let i = count - 1; i >= 0; i--) {
           if (hasNewTile && i === count - 1) {
-              // no gap for first (last in array)
+              // no gap for first
           } else if (hasNewTile && i === count - 2) {
               cx -= newTileGap;
           }
-
           cx -= w; 
           
           p.push();
           p.translate(cx, y);
 
-          // DRAW ANIMATION (Flip Up)
           const isLastTile = (i === count - 1);
           if (hasNewTile && isLastTile && isActive) {
               const dur = 400; 

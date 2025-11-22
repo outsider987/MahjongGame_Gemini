@@ -47,10 +47,17 @@ export class RenderService {
     // 1. Table Environment (Physical world)
     TableRenderService.drawTable(ctx);
 
-    // 2. Players & Discards
+    // 2. Discards Layer (Pass 1 - Bottom)
+    // Drawn before hands so hands can visually overlap "the river" if screen is tight
     const renderOrder = [2, 1, 3, 0]; // Top, Right, Left, Self
-    let metrics: RenderMetrics = { p0HandStartX: 0, p0TileW: 0 };
+    renderOrder.forEach(i => {
+      const player = gameState.players[i];
+      if (player) PlayerRenderService.drawDiscards(ctx, player, i);
+    });
 
+    // 3. Hands Layer (Pass 2 - Top)
+    // Ensures player hands are always the topmost physical elements
+    let metrics: RenderMetrics = { p0HandStartX: 0, p0TileW: 0 };
     renderOrder.forEach(i => {
       const player = gameState.players[i];
       if (!player) return;
@@ -59,13 +66,12 @@ export class RenderService {
       
       // Draw Hand & Melds
       const result = PlayerRenderService.drawPlayer(ctx, player, i, isActive);
+      
+      // Capture P0 Metrics for Hit Testing
       if (i === 0) metrics = result;
-
-      // Draw Discards
-      PlayerRenderService.drawDiscards(ctx, player, i);
     });
 
-    // 3. UI & Effects (Overlays)
+    // 4. UI & Effects (Overlays)
     TableRenderService.drawCenterCompass(ctx, gameState);
     
     // New HUD Service for Deck Count & Game Info
