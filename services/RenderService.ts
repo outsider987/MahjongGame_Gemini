@@ -4,6 +4,7 @@ import { TableRenderService } from './TableRenderService';
 import { PlayerRenderService } from './PlayerRenderService';
 import { EffectRenderService } from './EffectRenderService';
 import { InitPhaseRenderService } from './InitPhaseRenderService';
+import { HudRenderService } from './HudRenderService';
 
 // Re-export for compatibility with consumers (like GameCanvas)
 export type { RenderMetrics, RenderContext } from './RenderTypes';
@@ -43,9 +44,8 @@ export class RenderService {
         return { p0HandStartX: 0, p0TileW: 0 };
     }
 
-    // 1. Table Environment
+    // 1. Table Environment (Physical world)
     TableRenderService.drawTable(ctx);
-    TableRenderService.drawTableInfo(ctx, gameState.deckCount || 0);
 
     // 2. Players & Discards
     const renderOrder = [2, 1, 3, 0]; // Top, Right, Left, Self
@@ -65,8 +65,12 @@ export class RenderService {
       PlayerRenderService.drawDiscards(ctx, player, i);
     });
 
-    // 3. UI & Effects
+    // 3. UI & Effects (Overlays)
     TableRenderService.drawCenterCompass(ctx, gameState);
+    
+    // New HUD Service for Deck Count & Game Info
+    HudRenderService.drawHud(ctx, gameState.deckCount || 0);
+    
     EffectRenderService.drawEffects(ctx, gameState.effects);
 
     return metrics;

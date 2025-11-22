@@ -54,33 +54,6 @@ export class TableRenderService {
     p.pop();
   }
 
-  static drawTableInfo({ p, globalScale }: RenderContext, deckCount: number) {
-    p.push();
-    p.scale(globalScale);
-    p.translate(30, 70); // Slightly adjusted position due to margin
-    
-    // Darker background for info box to contrast with wood/felt
-    p.fill(0, 0, 0, 180);
-    p.stroke(COLORS.UI_BORDER_GOLD);
-    p.strokeWeight(1);
-    p.rect(0, 0, 180, 80, 12);
-    
-    p.noStroke();
-    p.fill('#fbbf24');
-    p.textSize(14);
-    p.text("CURRENT ROUND", 16, 12, 150);
-    
-    p.fill(255);
-    p.textSize(22);
-    p.textStyle(p.BOLD);
-    p.text("南風北局 (2/4)", 16, 45);
-    
-    p.textSize(28);
-    p.fill('#34d399'); 
-    p.text(deckCount, 130, 45);
-    p.pop();
-  }
-
   static drawCenterCompass({ p, width, height, globalScale }: RenderContext, game: any) {
     p.push();
     p.translate(width/2, height/2);
