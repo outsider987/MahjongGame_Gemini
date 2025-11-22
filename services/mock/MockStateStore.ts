@@ -55,10 +55,12 @@ export class MockStateStore {
   }
 
   getPlayerPos(idx: number) {
-      if (idx === 0) return { x: 0, y: 200 }; 
-      if (idx === 1) return { x: 300, y: 0 }; 
-      if (idx === 2) return { x: 0, y: -200 };
-      if (idx === 3) return { x: -300, y: 0 }; 
+      // Return Offsets from Center (0,0)
+      // Screen center is (0,0) in logic space, +Y is Down, +X is Right
+      if (idx === 0) return { x: 0, y: 220 };  // Bottom Player
+      if (idx === 1) return { x: 380, y: 0 };  // Right Player
+      if (idx === 2) return { x: 0, y: -220 }; // Top Player
+      if (idx === 3) return { x: -380, y: 0 }; // Left Player
       return { x: 0, y: 0 };
   }
 

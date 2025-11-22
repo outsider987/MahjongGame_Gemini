@@ -131,9 +131,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
 
   // --- Effect System ---
-  const triggerEffect = (type: string, text?: string, x?: number, y?: number, variant?: string, tile?: Tile) => {
+  const triggerEffect = (type: string, text?: string, offX: number = 0, offY: number = 0, variant?: string, tile?: Tile) => {
       const centerX = window.innerWidth / 2;
       const centerY = window.innerHeight / 2;
+      
+      // Scale offsets based on screen width for responsive positioning
+      const scale = Math.min(1.2, Math.max(0.6, window.innerWidth / 1280));
+
+      // Calculate absolute position from center offset
+      // If offsets (offX, offY) are 0, it places effect at screen center
+      const x = centerX + (offX * scale);
+      const y = centerY + (offY * scale);
       
       let particles: any[] | undefined = undefined;
       let life = 60;
@@ -145,7 +153,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       
       // Create Specific Particles
       if (type === 'PARTICLES' || type === 'ACTION_CHOW' || type === 'ACTION_PONG' || type === 'ACTION_KONG') {
-          particles = createParticles(x || centerX, y || centerY, type as any, variant);
+          particles = createParticles(x, y, type as any, variant);
       }
 
       effectsRef.current.push({
@@ -154,8 +162,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           variant,
           text,
           tile,
-          x: x || centerX,
-          y: y || centerY,
+          x, 
+          y,
           life,
           particles
       });
