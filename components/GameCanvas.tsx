@@ -295,8 +295,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       let globalScale = 1;
 
       p.preload = () => {
-        // --- S: Call Asset Service ---
-        AssetLoader.preload(p);
+         // Now we generate assets locally instead of loading them
+         // This uses p5.createGraphics so it's synchronous but heavy, 
+         // usually safe in preload or setup.
       };
 
       p.setup = () => {
@@ -304,6 +305,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         canvas.parent(renderRef.current!);
         p.frameRate(30);
         p.textFont("'Noto Serif TC', 'Roboto', serif");
+        
+        // GENERATE ASSETS LOCALLY
+        AssetLoader.generateAll(p);
+        
         startNewGame();
       };
 
