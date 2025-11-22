@@ -186,7 +186,7 @@ export class InitPhaseRenderService {
         p.textAlign(p.CENTER);
         p.textSize(20 * globalScale);
         p.fill('#fbbf24');
-        p.text("自動洗牌中...", 0, -180 * globalScale);
+        p.text("洗牌中... (Zhuā Wèi)", 0, -180 * globalScale);
 
         // "Washing Machine" Effect
         const count = 16;
@@ -260,8 +260,6 @@ export class InitPhaseRenderService {
             }
 
             // Scale X from 1 -> 0 -> 1 to simulate 3D Flip
-            // 0.0 - 0.5: Shrink (Back)
-            // 0.5 - 1.0: Grow (Front)
             let scaleX = 1;
             const isFaceUp = progress > 0.5;
             
@@ -300,10 +298,6 @@ export class InitPhaseRenderService {
                     p.push();
                     p.translate(w/2, -25 * globalScale);
                     
-                    // Fixed scale for indicator (cancel parent flip scale)
-                    // Need to invert the X scale we applied earlier? 
-                    // Actually visual glitches are minor here, but let's try to just draw simple
-                    
                     // Glowing Dealer Indicator
                     p.drawingContext.shadowColor = '#ef4444';
                     p.drawingContext.shadowBlur = 15;
@@ -339,7 +333,7 @@ export class InitPhaseRenderService {
         p.fill(255, 255, 255, alpha);
         p.textAlign(p.CENTER);
         p.textSize(22 * globalScale);
-        p.text("東風位為莊家", 0, 0);
+        p.text("東風位為莊家 (抓位結果)", 0, 0);
         p.pop();
     }
 }

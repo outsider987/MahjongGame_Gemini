@@ -8,41 +8,47 @@ export class InitState implements IGameState {
   enter(ctx: IMockContext) {
     ctx.store.initGame();
     ctx.store.dto.state = 'STATE_INIT';
+    
+    // Step 0: WAITING (Matching players...)
     ctx.store.dto.initData = { step: 'WAITING', diceValues: [], windAssignment: {} };
     this.broadcast(ctx);
 
-    // Sequence of Animations
+    // Step 1: SHUFFLE (Simulate mechanical shuffle)
     ctx.schedule(() => {
-        const d1 = Math.floor(Math.random() * 6) + 1;
-        const d2 = Math.floor(Math.random() * 6) + 1;
-        
-        ctx.store.dto.initData = { step: 'DICE', diceValues: [d1, d2], windAssignment: {} };
-        ctx.socket.trigger('game:effect', { type: 'TEXT', text: `擲骰: ${d1} + ${d2}` });
+        ctx.store.dto.initData = { step: 'SHUFFLE', diceValues: [], windAssignment: {} };
+        ctx.socket.trigger('game:effect', { type: 'TEXT', text: '洗牌中...' });
         this.broadcast(ctx);
 
+        // Step 2: DICE (After Shuffle - Determine start position)
         ctx.schedule(() => {
-             ctx.store.dto.initData = { step: 'SHUFFLE', diceValues: [d1, d2], windAssignment: {} };
-             this.broadcast(ctx);
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            
+            ctx.store.dto.initData = { step: 'DICE', diceValues: [d1, d2], windAssignment: {} };
+            ctx.socket.trigger('game:effect', { type: 'TEXT', text: `擲骰: ${d1} + ${d2}` });
+            this.broadcast(ctx);
 
+            // Step 3: REVEAL (After Dice - Assign/Reveal Winds)
             ctx.schedule(() => {
-                this.assignWinds(ctx);
-                ctx.store.dto.initData = { ...ctx.store.dto.initData, step: 'REVEAL' };
-                this.broadcast(ctx);
-                ctx.socket.trigger('game:effect', { type: 'TEXT', text: '決定莊家' });
-                
+                 this.assignWinds(ctx);
+                 ctx.store.dto.initData = { ...ctx.store.dto.initData, step: 'REVEAL' };
+                 this.broadcast(ctx);
+                 ctx.socket.trigger('game:effect', { type: 'TEXT', text: '抓位結果' });
+
+                // Step 4: DEAL (After Reveal - Start Game)
                 ctx.schedule(() => {
                     ctx.store.dto.initData = undefined;
                     this.dealTiles(ctx);
-                }, 3000);
+                }, 3500); // Allow time to see winds
 
-            }, 2000);
-        }, 2500);
-    }, 1000);
+            }, 2500); // Allow time for dice animation
+        }, 3000); // Allow time for shuffle animation
+    }, 1500); // Allow time for waiting screen
   }
 
   private assignWinds(ctx: IMockContext) {
         const winds = [1, 2, 3, 4];
-        // Shuffle
+        // Shuffle the wind tiles virtually
         for (let i = winds.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [winds[i], winds[j]] = [winds[j], winds[i]];
@@ -56,6 +62,7 @@ export class InitState implements IGameState {
             assignment[String(idx)] = windVal;
             p.info.wind = windNames[windVal];
             p.info.isDealer = (windVal === 1);
+            p.info.seatWind = windNames[windVal]; // Assign seat wind
         });
         ctx.store.dto.initData.windAssignment = assignment;
   }
@@ -71,13 +78,7 @@ export class InitState implements IGameState {
       ctx.store.sortHand(i);
     }
     
-    // NOTE: In standard rules, Dealer gets 14/17 tiles depending on variation. 
-    // Here we give everyone 16, and dealer will draw first in game or get 1 extra now.
-    // Let's give Dealer one extra (17th) to start discard phase immediately, 
-    // BUT Flower replacement must happen first.
-    // We will hold off the 17th tile until GameplayState OR treat the initial 16 as base.
-    // Taiwanese 16-tile MJ: Dealer starts with 17.
-    
+    // Give Dealer one extra (17th) to start discard phase immediately
     if (ctx.store.deck.length > 0) {
        ctx.store.players[dealerIdx].hand.push(ctx.store.deck.pop()!);
        ctx.store.sortHand(dealerIdx);
