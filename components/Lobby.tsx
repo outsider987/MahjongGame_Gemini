@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Users, Search, Plus, LogOut, Trophy, Settings } from 'lucide-react';
+import { Users, Search, Plus, LogOut, Trophy, Settings, Wrench } from 'lucide-react';
 import { AppView } from '../types';
 import { Button } from './ui/Button';
 import { MOCK_PLAYERS, MOCK_ROOMS } from '../constants';
@@ -44,6 +44,19 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
         </div>
         
         <div className="flex items-center gap-4">
+          {/* DEBUG BUTTON */}
+          <button 
+            onClick={() => setView(AppView.DEBUG)}
+            className="p-2 bg-gray-800/50 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white border border-gray-600 transition-colors group relative"
+            title="開發者工具 (Debug Mode)"
+          >
+             <Wrench size={18} />
+             <span className="absolute -bottom-1 -right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+             </span>
+          </button>
+
           <div className="bg-black/40 px-3 py-1 rounded-full border border-yellow-600 flex items-center gap-2 shadow-inner">
             <div className="w-4 h-4 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_#fbbf24]"></div>
             <span className="text-yellow-400 font-mono font-bold">1,250 房卡</span>

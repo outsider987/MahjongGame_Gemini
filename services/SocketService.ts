@@ -21,7 +21,7 @@ export interface ClientEvents {
 class SocketService {
   // Allow type to be real Socket OR MockSocket
   public socket: any | null = null;
-  private mockBackend: MockBackend | null = null;
+  public mockBackend: MockBackend | null = null;
 
   public connect(url: string = "http://localhost:8080"): any {
     if (this.socket) return this.socket;
@@ -74,6 +74,12 @@ class SocketService {
   
   public restartGame() {
     this.socket?.emit("game:restart");
+  }
+
+  // --- DEBUG HELPERS ---
+  // Exposed for DebugScene to manipulate state directly
+  public getDebugBackend() {
+      return this.mockBackend;
   }
 }
 

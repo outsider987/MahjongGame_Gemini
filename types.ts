@@ -2,6 +2,7 @@
 export enum AppView {
   LOBBY = 'LOBBY',
   GAME = 'GAME',
+  DEBUG = 'DEBUG',
 }
 
 export enum GameStateEnum {
@@ -86,7 +87,7 @@ export interface RoomSettings {
 
 export interface VisualEffect {
   id: number;
-  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP' | 'ACTION_CHOW' | 'ACTION_PONG' | 'ACTION_KONG';
+  type: 'TEXT' | 'LIGHTNING' | 'PARTICLES' | 'SHOCKWAVE' | 'TILE_POPUP' | 'ACTION_CHOW' | 'ACTION_PONG' | 'ACTION_KONG' | 'FLOWER_REVEAL';
   variant?: string; // e.g., 'HU', 'GOLD', 'BLUE', 'FIRE'
   text?: string;
   tile?: Tile; // For TILE_POPUP

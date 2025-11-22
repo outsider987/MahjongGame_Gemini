@@ -172,7 +172,11 @@ export class PlayerRenderService {
       
       const w = 32 * globalScale; 
       const h = 42 * globalScale; 
-      const cols = 6; 
+      
+      // Adjusted columns for Player 0 (Self) to 12 to reduce rows (2 rows max for typical game)
+      // Others keep 6
+      const cols = index === 0 ? 12 : 6; 
+
       const RIVER_OFFSET = 100 * globalScale;
       const richiiIndex = player.info?.richiiDiscardIndex ?? -1;
 
@@ -256,7 +260,7 @@ export class PlayerRenderService {
       });
       p.pop();
   }
-
+  
   private static drawHandSequence(
       ctx: RenderContext, hand: Tile[], startX: number, y: number, w: number, h: number, 
       dir: 1 | -1, type: string, 
