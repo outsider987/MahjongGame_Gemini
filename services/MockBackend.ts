@@ -1,5 +1,5 @@
 
-import { GameStateDTO, Player, Tile, Suit, ActionType, Meld } from '../types';
+import { GameStateDTO, Player, Tile, Suit, ActionType, Meld, InitData } from '../types';
 import { generateDeck } from './mahjongLogic';
 import { MOCK_PLAYERS } from '../constants';
 
@@ -54,6 +54,7 @@ export class MockBackend {
   
   private timerInterval: any = null;
   private botTimeout: any = null;
+  private initTimeouts: any[] = [];
 
   constructor() {
     this.socket = new MockSocket(this);
@@ -104,6 +105,8 @@ export class MockBackend {
   private clearTimers() {
       if (this.timerInterval) clearInterval(this.timerInterval);
       if (this.botTimeout) clearTimeout(this.botTimeout);
+      this.initTimeouts.forEach(t => clearTimeout(t));
+      this.initTimeouts = [];
       this.timerInterval = null;
       this.botTimeout = null;
   }
@@ -129,19 +132,61 @@ export class MockBackend {
       melds: []
     }));
 
-    // STATE_INIT: Seat Grabbing Phase (抓位)
+    // STATE_INIT: Seat Grabbing Sequence (抓位)
     this.state.turn = -1;
-    this.state.state = 'STATE_INIT'; // 開局抓位狀態
+    this.state.state = 'STATE_INIT'; 
     this.state.actionTimer = 0;
+    
+    // Step 1: Waiting (Start)
+    this.state.initData = { step: 'WAITING', diceValues: [], windAssignment: {} };
     this.broadcastState();
+    this.socket.trigger('game:effect', { type: 'TEXT', text: '準備抓位' });
 
-    // Show visual effect for Seat Grabbing
-    this.socket.trigger('game:effect', { type: 'TEXT', text: '正在抓位...' });
+    // Step 2: Dice Roll (After 1s)
+    this.initTimeouts.push(setTimeout(() => {
+        const d1 = Math.floor(Math.random() * 6) + 1;
+        const d2 = Math.floor(Math.random() * 6) + 1;
+        
+        this.state.initData = { 
+            step: 'DICE', 
+            diceValues: [d1, d2], 
+            windAssignment: {} 
+        };
+        this.socket.trigger('game:effect', { type: 'TEXT', text: `擲骰: ${d1} + ${d2}` });
+        this.broadcastState();
 
-    // Delay to simulate the process, then deal tiles
-    setTimeout(() => {
-        this.dealTiles();
-    }, 2000);
+        // Step 3: Shuffle Winds (After 2.5s)
+        this.initTimeouts.push(setTimeout(() => {
+             this.state.initData = { 
+                step: 'SHUFFLE', 
+                diceValues: [d1, d2], 
+                windAssignment: {} 
+            };
+            this.broadcastState();
+
+            // Step 4: Reveal Winds (After 2s)
+            this.initTimeouts.push(setTimeout(() => {
+                // Assign standard positions: P0=East, P1=South...
+                const winds: Record<string, string> = { 
+                    "0": 'EAST', "1": 'SOUTH', "2": 'WEST', "3": 'NORTH' 
+                };
+                
+                this.state.initData = { 
+                    step: 'REVEAL', 
+                    diceValues: [d1, d2], 
+                    windAssignment: winds 
+                };
+                this.broadcastState();
+                
+                // Step 5: Start Game (After 3s)
+                this.initTimeouts.push(setTimeout(() => {
+                    this.state.initData = undefined; // Clear Init Data
+                    this.dealTiles();
+                }, 3000));
+
+            }, 2000));
+        }, 2500));
+    }, 1000));
   }
 
   private dealTiles() {
@@ -157,7 +202,6 @@ export class MockBackend {
 
     // Dealer (P0) gets 17th tile
     this.players[0].hand.push(this.deck.pop()!);
-    // Note: We do NOT sort P0 hand here so the 17th tile is the "new" one
     
     this.state.turn = 0; // P0 starts
     this.state.state = 'DISCARD';
@@ -294,7 +338,8 @@ export class MockBackend {
       state: this.state.state,
       lastDiscard: this.state.lastDiscard,
       actionTimer: this.state.actionTimer, 
-      availableActions: this.state.availableActions
+      availableActions: this.state.availableActions,
+      initData: this.state.initData
     };
     this.socket.trigger('game:state', dto);
   }

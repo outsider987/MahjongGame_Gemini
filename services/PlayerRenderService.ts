@@ -24,8 +24,8 @@ export class PlayerRenderService {
      const MELD_GAP = 8 * s;
      
      // Side tiles Thickness (Width on screen)
-     // Increased slightly to allow the "Standing" look to be more visible
-     const SIDE_TILE_THICKNESS = 26 * s; // Increased from 22
+     // Increased to 32 to make the side profile (Bone+Bamboo) more visible and aesthetic
+     const SIDE_TILE_THICKNESS = 32 * s; 
      
      const P0_MARGIN_RIGHT = 160 * s;
      const SIDE_MARGIN_BOTTOM = 150 * s; 
@@ -85,7 +85,7 @@ export class PlayerRenderService {
 
          const dummyHand = Array(visualHandCount).fill(null);
          // Draw Tiles
-         // Note: h (Length) is 64 (Screen Leftwards). w (Thickness) is 26 (Screen Down).
+         // Note: we pass TILE_H as the length (h), and SIDE_TILE_THICKNESS as the step/width (w)
          this.drawHandSequence(ctx, dummyHand, startY, 0, SIDE_TILE_THICKNESS, TILE_H, 1, 'SIDE_STANDING_R', hasNew, 1, GAP_NEW_TILE);
          
          if (melds.length > 0) {
@@ -110,9 +110,6 @@ export class PlayerRenderService {
      } else if (index === 3) {
          // Left Player
          // We need correct Z-Order: Bottom tiles should cover Top tiles (Closest covers Furthest).
-         // With standard loop, we draw sequentially. 
-         // If we draw Bottom -> Top, the Top covers Bottom (Wrong).
-         // So we need to reverse the drawing order for the hand tiles.
          
          p.translate(100 * s, height); 
          p.rotate(-p.HALF_PI); // Rotate -90. X is Up. Y is Right.
@@ -122,25 +119,16 @@ export class PlayerRenderService {
          const limitY = height - SIDE_MARGIN_BOTTOM;
          if (endY > limitY) startY = limitY - totalSize;
 
-         // To fix Z-index: Draw from Top(Furthest) to Bottom(Closest).
-         // In rotated system (X Up), Top is High X. Bottom is Low X.
-         // Standard loop increases X (Low -> High). 
-         // So we need to start at High X and decrease.
-         
          const dummyHand = Array(visualHandCount).fill(null);
          
          // Calc End Position (High X)
          const fullLen = (visualHandCount * SIDE_TILE_THICKNESS) + (hasNew ? GAP_NEW_TILE : 0);
          const endPos = startY + fullLen;
          
-         // Custom Reverse Loop for Left Player Hand
+         // Custom Reverse Loop for Left Player Hand (Draws Top -> Bottom relative to Screen)
          this.drawLeftHandReverse(ctx, dummyHand, endPos, 0, SIDE_TILE_THICKNESS, TILE_H, hasNew, GAP_NEW_TILE);
          
-         // Melds are separate, usually below/above. 
-         // For simplicity, draw Melds normally (they are usually 'flat' or separate group)
          if (melds.length > 0) {
-             // Melds usually at the "far" end (Top of screen for Left player)
-             // Current logic puts them after hand.
              const meldStartY = startY + fullLen + GAP_HAND_MELD;
              this.drawMelds(ctx, melds, meldStartY, 10 * s, MELD_W, MELD_H, 1, MELD_GAP);
          }
@@ -214,27 +202,17 @@ export class PlayerRenderService {
       const count = hand.length;
       
       // Start from the Top (High X) and move Down (Low X)
-      // We iterate backwards through the array so the first tile (index 0, Bottom of screen) 
-      // is drawn LAST (on top).
-      
       let cx = endX; // Top-most coordinate
-      
-      // Loop backwards: i = count-1 (Top tile) down to 0 (Bottom tile)
-      // Wait, if we draw count-1 first, it is at the Top.
-      // Then we draw count-2 below it.
-      // The later drawing covers the earlier.
-      // So Bottom covers Top. This is what we want!
       
       for (let i = count - 1; i >= 0; i--) {
           // If this is the new tile (last index), it has a gap before the rest
           if (hasNewTile && i === count - 1) {
               // cx is already at end.
-              // The next tile should be at cx - w - gap.
           } else if (hasNewTile && i === count - 2) {
               cx -= newTileGap;
           }
 
-          cx -= w; // Move down for current tile space (since we draw at cx)
+          cx -= w; // Move down for current tile space
           
           // @ts-ignore
           TileRenderService.drawTile(p, cx, y, hand[i], w, h, 'SIDE_STANDING_L', globalScale);

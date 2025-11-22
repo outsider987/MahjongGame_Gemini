@@ -3,6 +3,7 @@ import { RenderContext, RenderMetrics } from './RenderTypes';
 import { TableRenderService } from './TableRenderService';
 import { PlayerRenderService } from './PlayerRenderService';
 import { EffectRenderService } from './EffectRenderService';
+import { InitPhaseRenderService } from './InitPhaseRenderService';
 
 // Re-export for compatibility with consumers (like GameCanvas)
 export type { RenderMetrics, RenderContext } from './RenderTypes';
@@ -16,10 +17,6 @@ export class RenderService {
     hoveredTileIndex: number
   ): RenderMetrics {
     
-    if (!gameState || !gameState.players) {
-        return { p0HandStartX: 0, p0TileW: 0 };
-    }
-
     const ctx: RenderContext = {
       p,
       globalScale,
@@ -27,6 +24,18 @@ export class RenderService {
       height: p.height,
       hoveredTileIndex
     };
+
+    // 0. INIT STATE OVERRIDE
+    if (gameState && gameState.state === 'STATE_INIT') {
+        InitPhaseRenderService.drawInitPhase(ctx, gameState.initData);
+        // Still draw effects (like text overlays) on top
+        EffectRenderService.drawEffects(ctx, gameState.effects);
+        return { p0HandStartX: 0, p0TileW: 0 };
+    }
+
+    if (!gameState || !gameState.players) {
+        return { p0HandStartX: 0, p0TileW: 0 };
+    }
 
     // 1. Table Environment
     TableRenderService.drawTable(ctx);

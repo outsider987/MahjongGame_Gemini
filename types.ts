@@ -41,6 +41,12 @@ export interface Player {
   seatWind: string;
 }
 
+export interface InitData {
+  step: 'WAITING' | 'DICE' | 'SHUFFLE' | 'REVEAL';
+  diceValues: number[];
+  windAssignment: Record<string, string>; // playerId -> 'EAST' etc.
+}
+
 // Data Transfer Object for Game State (matched with Go backend)
 export interface GameStateDTO {
   deckCount: number;
@@ -56,6 +62,7 @@ export interface GameStateDTO {
   lastDiscard: { tile: Tile, playerIndex: number } | null;
   actionTimer: number;
   availableActions: ActionType[];
+  initData?: InitData; // Optional data for STATE_INIT phase
 }
 
 export type ActionType = 'PONG' | 'KONG' | 'CHOW' | 'HU' | 'PASS';

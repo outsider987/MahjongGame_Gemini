@@ -18,8 +18,9 @@ export const COLORS = {
   TILE_FACE_SHADOW: '#cbd5e1', // Side of the bone
   
   // Split View Section Colors
-  TILE_SECTION_BONE: '#f8fafc', // Slate 50
-  TILE_SECTION_BAMBOO: '#065f46', // Emerald 800
+  TILE_SECTION_BONE: '#f1f5f9', // Slate 100 (Ivory look)
+  TILE_SECTION_BAMBOO: '#065f46', // Emerald 800 (Darker Jade)
+  TILE_SECTION_BAMBOO_LIGHT: '#059669', // Emerald 600 (Highlight)
   
   TILE_SIDE_HIGHLIGHT: 'rgba(255,255,255,0.4)',
   TILE_SHADOW: 'rgba(0,0,0,0.4)',

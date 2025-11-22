@@ -149,170 +149,116 @@ export class TileRenderService {
   }
 
   // --- 4. Side Standing (Opponent Left/Right) ---
-  // "Standing" look with White Top Cap and Split Bottom Section
-  private static drawSideStandingTile(p: any, w: number, h: number, scale: number, isLeft: boolean) {
+  // Draws a realistic 2.5D vertical tile viewed from the side
+  private static drawSideStandingTile(p: any, stepW: number, lenH: number, scale: number, isLeft: boolean) {
       const ctx = p.drawingContext;
-      const r = 3 * scale;
       
-      // Coords in Rotated Space:
-      // w = Thickness of tile (Vertical stack axis)
-      // h = Length of tile (Horizontal towards center)
+      // In the rotated context:
+      // 'dw' is the visual Height of the tile (Vertical axis on screen)
+      // 'dh' is the visual Width/Thickness of the tile (Horizontal axis on screen)
+      const dw = lenH; // The length of the tile (~64px)
+      const dh = stepW; // The thickness of the tile (~32px)
       
-      // Shadow
+      // 1. Shadow (Offset slightly to imply ground contact)
       p.noStroke();
       p.fill(COLORS.TILE_SHADOW);
-      p.rect(3*scale, 3*scale, w, h, r);
+      // Shadow is projected behind
+      p.rect(4*scale, 4*scale, dw, dh, 3*scale);
 
-      // 1. Main Body: Green Jade Back
-      // Create a cylindrical gradient along the horizontal length
-      const grdBody = ctx.createLinearGradient(0, 0, 0, h); 
-      // Wait, Gradient should be vertical (along W) to show roundness of the back?
-      // Actually, Jade tiles are usually rounded on the Back face.
-      // So gradient from x=0 to x=w.
-      const grdJade = ctx.createLinearGradient(0, 0, w, 0);
-      grdJade.addColorStop(0, COLORS.TILE_BACK_DARK);
-      grdJade.addColorStop(0.5, COLORS.TILE_BACK_MAIN);
-      grdJade.addColorStop(1, COLORS.TILE_BACK_DARK);
+      // 2. Material Split (Bone vs Bamboo)
+      // Usually, standing tiles viewed from side show the seam.
+      // We split the Thickness (dh) into Bone section (Face) and Bamboo section (Back).
+      // Approx 35% Bone, 65% Bamboo.
+      const boneRatio = 0.35;
+      const boneSize = dh * boneRatio;
+      const bambooSize = dh - boneSize;
       
-      ctx.fillStyle = grdJade;
-      p.rect(0, 0, w, h, r);
+      // --- Draw Main Body ---
       
-      // 2. Gloss Highlight (Center of the back)
-      p.fill(255, 255, 255, 30);
-      p.rect(w * 0.3, 0, w * 0.4, h, 2*scale);
+      // A. Bone Section (Ivory White)
+      // Gradient goes along the thickness to imply roundness
+      const grdBone = ctx.createLinearGradient(0, 0, 0, boneSize);
+      grdBone.addColorStop(0, '#ffffff');
+      grdBone.addColorStop(0.8, COLORS.TILE_SECTION_BONE);
+      grdBone.addColorStop(1, '#cbd5e1'); // Slight darkening at joint
+      ctx.fillStyle = grdBone;
+      p.rect(0, 0, dw, boneSize);
+      
+      // B. Bamboo Section (Jade Green)
+      const grdBamboo = ctx.createLinearGradient(0, boneSize, 0, dh);
+      grdBamboo.addColorStop(0, COLORS.TILE_SECTION_BAMBOO_LIGHT); // Highlight near joint
+      grdBamboo.addColorStop(0.5, COLORS.TILE_SECTION_BAMBOO);
+      grdBamboo.addColorStop(1, COLORS.TILE_BACK_DARK); // Shadow at back edge
+      ctx.fillStyle = grdBamboo;
+      p.rect(0, boneSize, dw, bambooSize);
 
-      // 3. Caps (Top and Bottom)
-      // "Top Head" is White.
-      // "Bottom (Player Side)" is Split.
-      
-      const capSize = 5 * scale; // Height of the cap visually
-
-      if (isLeft) {
-          // LEFT PLAYER (Rotated -90)
-          // X points UP. Y points RIGHT.
-          // Stack grows Up. 
-          // x=0 is Bottom (Near Player). x=w is Top (Away).
-          
-          // TOP CAP (x=w): White Head
-          this.drawCap(p, w - capSize, 0, capSize, h, scale, 'WHITE', r, true);
-
-          // BOTTOM SECTION (x=0): Split View
-          this.drawSplitSection(p, 0, 0, capSize, h, scale);
-
-      } else {
-          // RIGHT PLAYER (Rotated 90)
-          // X points DOWN. Y points LEFT.
-          // Stack grows Down.
-          // x=0 is Top (Away). x=w is Bottom (Near Player).
-          
-          // TOP CAP (x=0): White Head
-          this.drawCap(p, 0, 0, capSize, h, scale, 'WHITE', r, false);
-
-          // BOTTOM SECTION (x=w): Split View
-          this.drawSplitSection(p, w - capSize, 0, capSize, h, scale);
-      }
-  }
-
-  private static drawCap(p: any, x: number, y: number, w: number, h: number, scale: number, type: 'WHITE'|'SPLIT', r: number, isBottomEdge: boolean) {
-      const ctx = p.drawingContext;
-      if (type === 'WHITE') {
-          const grd = ctx.createLinearGradient(x, 0, x+w, 0);
-          grd.addColorStop(0, '#e2e8f0');
-          grd.addColorStop(0.5, '#ffffff');
-          grd.addColorStop(1, '#e2e8f0');
-          ctx.fillStyle = grd;
-          
-          // Rounding only the outer edge
-          if (isBottomEdge) {
-             // Bottom of render rect (which is Top of stack for Left Player)
-             p.rect(x, y, w, h, 0, r, r, 0); 
-          } else {
-             // Top of render rect
-             p.rect(x, y, w, h, r, 0, 0, r);
-          }
-      }
-  }
-
-  private static drawSplitSection(p: any, x: number, y: number, w: number, h: number, scale: number) {
-      // Draws the cross-section of the tile (Bone + Bamboo)
-      // This represents the "Side closer to player"
-      
-      const ctx = p.drawingContext;
-      
-      // 1. Bamboo Layer (Dark Green) - The Back
-      // Usually Back is ~30-40% of thickness?
-      // Let's assume the Green Back is on the "Outside" of the wall?
-      // For Right Player: Back is visible (Left). Face is Right.
-      // So Green is at y=0? No.
-      // In rotated coords:
-      // Right Player: Y points Left (Center). Back faces Center.
-      // So Back is at Y=0? Or Y=h?
-      // We draw the Back Rect at (0,0). 
-      // So the SURFACE is Back. 
-      // The Cross Section must match the surface.
-      // So the Green part of the split is the "Top" surface of the cross-section block?
-      // No, cross section is vertical cut.
-      // Green Back is usually convex.
-      
-      // Let's simplify:
-      // Split Line runs horizontally through the section? No, vertically relative to tile face.
-      // Tile Face is "Side" of the wall.
-      // So split is vertical.
-      
-      const splitY = h * 0.55; // Position of the dovetail join
-      
-      p.push();
-      // Clip to the cap area
-      p.clip(() => {
-          p.rect(x, y, w, h);
-      });
-
-      // Bamboo (Green) Part - Assuming it matches the Back
-      // Back is the visible face.
-      // So this section should look like the end of that green block.
-      p.fill(COLORS.TILE_SECTION_BAMBOO);
-      p.rect(x, y, w, h); // Fill all first
-      
-      // Bone (White) Part
-      // Face is hidden. The White part is "behind" or "below" the green back.
-      // In this 2.5D representation, let's put the white part at the "Back" of the Z-depth?
-      // Or if viewing from Center:
-      // We see Green Back.
-      // We see the end of the Green Back.
-      // We see the White Face Layer behind it.
-      p.fill(COLORS.TILE_SECTION_BONE);
-      
-      // Draw White part. 
-      // If Back is Center-Facing (Y+ for Left, Y+ for Right... wait)
-      // Right Player: Y points Left (Center). Back faces Center.
-      // So Green is at Y=High (Close to center)? No.
-      // Let's just draw a split: Top 60% Green, Bottom 40% White.
-      p.rect(x, splitY, w, h - splitY);
-      
-      // Dovetail Joint (Zig Zag Line)
+      // C. Dovetail Joint (The zigzag connector)
+      // Drawn vertically along the tile height
       p.stroke(COLORS.TILE_BACK_DARK);
-      p.strokeWeight(1);
+      p.strokeWeight(1 * scale);
       p.noFill();
       p.beginShape();
-      const zigzagW = 4 * scale;
-      for(let i = x; i <= x + w; i += zigzagW) {
-          p.vertex(i, splitY);
-          p.vertex(i + zigzagW/2, splitY + (2*scale));
+      const zigSize = 5 * scale;
+      for(let i = 0; i <= dw; i += zigSize) {
+          // Draw zigzag centered on the seam (boneSize)
+          p.vertex(i, boneSize);
+          p.vertex(i + zigSize/2, boneSize + (1.5 * scale));
       }
       p.endShape();
+      p.noStroke();
 
-      // Add Shadow to make the section look "cut"
-      const grdShadow = ctx.createLinearGradient(x, 0, x+w, 0);
-      grdShadow.addColorStop(0, 'rgba(0,0,0,0.2)');
-      grdShadow.addColorStop(1, 'rgba(0,0,0,0.0)');
-      ctx.fillStyle = grdShadow;
-      p.rect(x, y, w, h);
-
-      p.pop();
+      // --- 3. Top Cap (The "Standing" Perspective) ---
+      // This implies the 2.5D look. We see the "Top" of the tile.
+      // Right Player (isLeft=false): +X is Screen Down. Top of Tile is Low X (0).
+      // Left Player (isLeft=true): +X is Screen Up. Top of Tile is High X (dw).
       
-      // Highlight Edge
-      p.stroke(255, 255, 255, 50);
-      p.line(x, y, x + w, y);
+      const capSize = 8 * scale; // Visual height of the cap
+      
+      // Determine location
+      let capX = 0;
+      let capH = capSize;
+      
+      if (isLeft) {
+          // Left Player: Top is at dw (Screen Top).
+          // We draw the cap at the very end of the bar.
+          capX = dw - capSize;
+          
+          // Draw White Top Cap
+          const grdCap = ctx.createLinearGradient(capX, 0, dw, 0);
+          grdCap.addColorStop(0, '#e2e8f0');
+          grdCap.addColorStop(0.4, '#ffffff');
+          ctx.fillStyle = grdCap;
+          
+          // Draw a rounded rect at the top
+          p.rect(capX, 0, capSize, dh, 2*scale);
+          
+          // Add a shiny highlight on the green part of the cap
+          p.fill(255, 255, 255, 100);
+          p.rect(capX, boneSize, capSize, bambooSize, 0, 2*scale, 2*scale, 0);
+
+      } else {
+          // Right Player: Top is at 0 (Screen Top).
+          capX = 0;
+          
+          // Draw White Top Cap
+          const grdCap = ctx.createLinearGradient(0, 0, capSize, 0);
+          grdCap.addColorStop(0, '#ffffff');
+          grdCap.addColorStop(1, '#e2e8f0');
+          ctx.fillStyle = grdCap;
+          
+          // Draw a rounded rect at the start
+          p.rect(0, 0, capSize, dh, 2*scale);
+          
+          // Shiny highlight
+          p.fill(255, 255, 255, 100);
+          p.rect(0, boneSize, capSize, bambooSize, 0, 0, 2*scale, 2*scale);
+      }
+      
+      // --- 4. Side Glint ---
+      // A subtle white line running down the green curvature to show material gloss
+      p.fill(255, 255, 255, 30);
+      // Highlight runs along length 'dw', positioned slightly into the green part
+      p.rect(0, boneSize + (3*scale), dw, 2*scale);
   }
   
   // --- Content Drawing (Face) ---
