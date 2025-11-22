@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { AppView, Suit, Tile, Player } from '../types';
 import { generateDeck } from '../services/mahjongLogic';
@@ -69,7 +68,14 @@ const INITIAL_PLAYERS: Player[] = [
 ];
 
 // --- Helper Component: Player HUD ---
-const PlayerCard = ({ player, position, isActive, isSelf = false }: { player: Player, position: 'bottom' | 'right' | 'top' | 'left', isActive: boolean, isSelf?: boolean }) => {
+interface PlayerCardProps {
+  player: Player;
+  position: 'bottom' | 'right' | 'top' | 'left';
+  isActive: boolean;
+  isSelf?: boolean;
+}
+
+const PlayerCard: React.FC<PlayerCardProps> = ({ player, position, isActive, isSelf = false }) => {
   
   const getPositionClasses = () => {
     switch(position) {
@@ -285,13 +291,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
     if (!window.p5) return;
 
     const sketch = (p: any) => {
-      const TILE_W = 44; 
-      const TILE_H = 60; 
-      const BOTTOM_Y_OFFSET = 140; 
+      // Base Constants (Design Reference: 1280x720)
+      const BASE_TILE_W = 44;
+      const BASE_TILE_H = 60;
+      const BASE_BOTTOM_OFFSET = 130;
       
-      // Globals for hit test
+      // Globals for hit test & layout
       let p0HandStartX = 0; 
+      let p0TileW = 0;
       let hoveredTileIndex = -1;
+      let globalScale = 1;
 
       p.setup = () => {
         const canvas = p.createCanvas(window.innerWidth, window.innerHeight);
@@ -321,12 +330,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       };
 
       p.draw = () => {
+        // Calculate Responsive Scale
+        // Base reference width 1280. Scale down if smaller, scale up slightly if larger but cap it.
+        globalScale = Math.min(1.2, Math.max(0.6, p.width / 1280));
+        
         p.background(COLORS.TABLE_BG_DARK);
         drawTable(p);
         drawTableInfo(p);
         
         const activeIdx = gameRef.current.turn;
-        gameRef.current.players.forEach((player, i) => {
+        
+        // Z-Index Control: Draw in Painter's Order (Back to Front)
+        // 2 (Top) -> 1 (Right) -> 3 (Left) -> 0 (Bottom/Self)
+        const renderOrder = [2, 1, 3, 0];
+        
+        renderOrder.forEach(i => {
+           const player = gameRef.current.players[i];
            drawPlayer(p, player, i, i === activeIdx);
            drawDiscards(p, player, i);
         });
@@ -390,7 +409,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
           const discardedTile = player.hand.splice(tileIdx, 1)[0];
           player.discards.push(discardedTile);
-          player.hand.sort((a,b) => a.value - b.value); // Sort AI hands too to keep them neat
+          player.hand.sort((a,b) => a.value - b.value); 
 
           game.lastDiscard = { tile: discardedTile, playerIndex: playerIdx };
           
@@ -405,17 +424,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
               }
           }
 
-          // 2. Check AI Interaction (Simple Priority)
+          // 2. Check AI Interaction 
           const aiAction = checkForAiAction(game, discardedTile, playerIdx);
           if (aiAction) {
-             // Execute AI Action
              executeAction(game, aiAction.playerIdx, aiAction.type, discardedTile, playerIdx);
              return;
           }
           
           // 3. No interruptions -> Next Turn
           game.state = 'INTERRUPT'; 
-          game.actionTimer = 10; // Small pause before next draw
+          game.actionTimer = 10; 
       };
 
       const drawEffects = (p: any) => {
@@ -445,10 +463,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                    const scale = p.map(fx.life, 50, 0, 0.8, 1.5);
                    p.scale(scale);
                    p.textAlign(p.CENTER, p.CENTER);
-                   p.textSize(100);
+                   p.textSize(100 * globalScale);
                    p.textStyle(p.BOLD);
                    p.fill(0, 0, 0, fx.life * 5);
-                   p.text(fx.text, 6, 6); // Shadow
+                   p.text(fx.text, 6, 6); 
                    p.fill('#fbbf24');
                    p.stroke('#b91c1c');
                    p.strokeWeight(4);
@@ -462,7 +480,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                       pt.life--;
                       p.noStroke();
                       p.fill(pt.color);
-                      p.circle(pt.x, pt.y, pt.size);
+                      p.circle(pt.x, pt.y, pt.size * globalScale);
                   });
               }
 
@@ -483,6 +501,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
       const drawTableInfo = (p: any) => {
          p.push();
+         p.scale(globalScale);
          p.translate(24, 90);
          p.fill(0, 0, 0, 80);
          p.stroke(COLORS.UI_BORDER_GOLD);
@@ -503,7 +522,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
       const drawCenterCompass = (p: any) => {
           p.push();
-          p.translate(p.width/2, p.height/2 - 20);
+          p.translate(p.width/2, p.height/2 - 20 * globalScale);
+          p.scale(globalScale);
           const boxSize = 120;
           p.fill(0, 0, 0, 200);
           p.stroke(COLORS.UI_BORDER_GOLD);
@@ -553,64 +573,150 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       const drawPlayer = (p: any, player: any, index: number, isActive: boolean) => {
          p.push();
          
+         const s = globalScale;
          const isSide = index === 1 || index === 3;
-         const handTileW = isSide ? 20 : TILE_W;
-         const handTileH = TILE_H;
-         const meldTileW = TILE_W * 0.85;
-         const meldTileH = TILE_H * 0.85;
          
+         // Scaled Metrics
+         const TILE_W = BASE_TILE_W * s;
+         const TILE_H = BASE_TILE_H * s;
+         const MELD_SCALE = 0.85;
+         const MELD_W = TILE_W * MELD_SCALE;
+         const MELD_H = TILE_H * MELD_SCALE;
+         const GAP_BETWEEN_HAND_MELD = 30 * s;
+         const GAP_NEW_TILE = 16 * s;
+         const MELD_GAP = 8 * s;
+         const SIDE_TILE_W = 20 * s; // Compressed width for side players
+         
+         // Safety Margins (Scaled)
+         const P0_RIGHT_MARGIN_SAFE = 160 * s; // Minimum space P0 must leave for P1
+         const SIDE_PLAYER_BOTTOM_SAFE = 180 * s; // Minimum space P1/P3 must leave for P0
+         const BASE_BOTTOM_Y = BASE_BOTTOM_OFFSET * s;
+
+         // --- DIMENSION CALCULATIONS ---
+         
+         const handLen = player.hand.length;
+         const hasNew = handLen % 3 === 2;
+         
+         // Calculate Visual Length of Hand
+         // For Side players, "Width" is effectively height
+         const tileWidthInHand = isSide ? SIDE_TILE_W : TILE_W;
+         let handVisualSize = (handLen * tileWidthInHand) + (hasNew ? GAP_NEW_TILE : 0);
+         
+         // Calculate Visual Length of Melds
+         const meldsVisualSize = player.melds.reduce((acc: number, m: Meld) => {
+            return acc + (m.tiles.length * MELD_W) + MELD_GAP;
+         }, 0);
+         
+         const totalContentSize = handVisualSize + (meldsVisualSize > 0 ? GAP_BETWEEN_HAND_MELD + meldsVisualSize : 0);
+
+         // --- POSITIONING & RENDERING ---
+
          if (index === 0) { 
-             // P0 (Human)
-             p.translate(p.width/2, p.height - BOTTOM_Y_OFFSET);
-             const handW = (player.hand.length * TILE_W);
-             p0HandStartX = p.width/2 - handW / 2;
+             // --- P0 (SELF) ---
+             // Layout: [Hand] ... [Melds]
+             // Goal: Center content, but clamp to avoid P1 on right.
              
-             // Draw Hand Centered
-             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'STANDING', player.hand.length % 3 === 2, 0);
+             p.translate(0, p.height - BASE_BOTTOM_Y); // Y Anchor
              
-             // Draw Melds Anchored Right (Fixed Position)
-             p.translate(p.width/2 - 100, 10); // Move to right corner area relative to center
-             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT'); // Grow Left
+             // 1. Ideal Center Start
+             let startX = (p.width - totalContentSize) / 2;
+             
+             // 2. Right Collision Constraint
+             const endX = startX + totalContentSize;
+             const limitX = p.width - P0_RIGHT_MARGIN_SAFE;
+             if (endX > limitX) {
+                 startX = limitX - totalContentSize;
+             }
+             
+             // 3. Left Boundary Constraint (Safety)
+             if (startX < 20 * s) startX = 20 * s;
+
+             // Render
+             // Draw Hand (Left to Right)
+             drawHandSequence(p, player.hand, startX, 0, TILE_W, TILE_H, 1, 'STANDING', hasNew, 0, GAP_NEW_TILE);
+             
+             // Draw Melds (Left to Right, after Hand)
+             if (player.melds.length > 0) {
+                const meldStartX = startX + handVisualSize + GAP_BETWEEN_HAND_MELD;
+                drawMeldsFixed(p, player.melds, meldStartX, 0, MELD_W, MELD_H, 1, 'FLAT', MELD_GAP);
+             }
+
+             // Update Hit Test
+             p0HandStartX = startX; 
+             p0TileW = TILE_W;
              
          } else if (index === 1) {
-             // P1 (Right)
-             p.translate(p.width - 140, p.height/2);
-             p.rotate(p.HALF_PI); 
-             const handW = player.hand.length * handTileW;
+             // --- P1 (RIGHT) ---
+             // Layout: Top -> Down
+             // [Hand]
+             // ...
+             // [Melds]
+             // Rotated 90deg. Coordinate X is Down.
              
-             // Hand
-             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'SIDE_STANDING', player.hand.length % 3 === 2, 1);
+             p.translate(p.width - (140 * s), 0);
+             p.rotate(p.HALF_PI);
              
-             // Melds Anchored "Bottom" of P1 (which is screen bottom-ish)
-             // P1's "Right" is +X (Screen Down)
-             p.translate(p.height/2 - 100, 0); 
-             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT'); // Grow Up (Negative X in local space)
+             // 1. Ideal Center (Vertical on screen)
+             let startY = (p.height - totalContentSize) / 2;
+             
+             // 2. Bottom Collision Constraint (Avoid P0)
+             // The "End" of P1 is the bottom-most Meld.
+             const endY = startY + totalContentSize;
+             const limitY = p.height - SIDE_PLAYER_BOTTOM_SAFE;
+             
+             if (endY > limitY) {
+                 startY = limitY - totalContentSize;
+             }
+
+             // Render
+             drawHandSequence(p, player.hand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 1, GAP_NEW_TILE);
+             
+             if (player.melds.length > 0) {
+                 const meldStartY = startY + handVisualSize + GAP_BETWEEN_HAND_MELD;
+                 drawMeldsFixed(p, player.melds, meldStartY, 0, MELD_W, MELD_H, 1, 'FLAT', MELD_GAP);
+             }
              
          } else if (index === 2) {
-             // P2 (Top)
-             p.translate(p.width/2, 100);
-             p.rotate(p.PI); 
-             const handW = player.hand.length * TILE_W;
+             // --- P2 (TOP) ---
+             // Layout: [Hand] ... [Melds]
+             // Rotated 180. 
              
-             drawHandSequence(p, player.hand, -handW/2, 0, handTileW, handTileH, 1, 'BACK_STANDING', player.hand.length % 3 === 2, 2);
+             p.translate(p.width, 100 * s);
+             p.rotate(p.PI);
              
-             // Melds Anchored Left (Screen Left, which is P2's Right)
-             // P2's "Right" is +X (Screen Left)
-             p.translate(p.width/2 - 100, 0);
-             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, -1, 'FLAT');
+             // P2 is safe, just center it.
+             const startX = (p.width - totalContentSize) / 2;
+             
+             drawHandSequence(p, player.hand, startX, 0, TILE_W, TILE_H, 1, 'BACK_STANDING', hasNew, 2, GAP_NEW_TILE);
+             
+             if (player.melds.length > 0) {
+                 const meldStartX = startX + handVisualSize + GAP_BETWEEN_HAND_MELD;
+                 drawMeldsFixed(p, player.melds, meldStartX, 0, MELD_W, MELD_H, 1, 'FLAT', MELD_GAP);
+             }
 
          } else if (index === 3) {
-             // P3 (Left)
-             p.translate(140, p.height/2);
-             p.rotate(-p.HALF_PI); 
-             const handW = player.hand.length * handTileW;
-
-             drawHandSequence(p, player.hand, handW/2, 0, handTileW, handTileH, -1, 'SIDE_STANDING', player.hand.length % 3 === 2, 3);
+             // --- P3 (LEFT) ---
+             // Layout: Top -> Down
              
-             // Melds Anchored "Bottom" (Screen Top)
-             // P3's "Right" is -X (Screen Up)
-             p.translate(-p.height/2 + 100, 0);
-             drawMeldsFixed(p, player.melds, 0, 0, meldTileW, meldTileH, 1, 'FLAT');
+             p.translate(140 * s, p.height);
+             p.rotate(-p.HALF_PI); 
+             
+             // 1. Ideal Center (Vertical)
+             let startY = (p.height - totalContentSize) / 2;
+             
+             // 2. Bottom Collision Constraint (Avoid P0)
+             const endY = startY + totalContentSize;
+             const limitY = p.height - SIDE_PLAYER_BOTTOM_SAFE;
+             if (endY > limitY) {
+                 startY = limitY - totalContentSize;
+             }
+
+             drawHandSequence(p, player.hand, startY, 0, TILE_W, TILE_H, 1, 'SIDE_STANDING', hasNew, 3, GAP_NEW_TILE);
+             
+             if (player.melds.length > 0) {
+                 const meldStartY = startY + handVisualSize + GAP_BETWEEN_HAND_MELD;
+                 drawMeldsFixed(p, player.melds, meldStartY, 0, MELD_W, MELD_H, 1, 'FLAT', MELD_GAP);
+             }
          }
          p.pop();
       };
@@ -619,54 +725,55 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           const tiles = player.discards;
           if (tiles.length === 0) return;
           p.push();
-          const w = 34; const h = 46; const cols = 6; 
+          const s = globalScale;
+          const w = 34 * s; 
+          const h = 46 * s; 
+          const cols = 6; 
           p.translate(p.width/2, p.height/2);
-          const RIVER_OFFSET = 120;
+          const RIVER_OFFSET = 120 * s;
           
           if (index === 0) p.translate(0, RIVER_OFFSET);
-          if (index === 1) { p.translate(RIVER_OFFSET + 40, 0); p.rotate(-p.HALF_PI); }
+          if (index === 1) { p.translate(RIVER_OFFSET + (40*s), 0); p.rotate(-p.HALF_PI); }
           if (index === 2) { p.translate(0, -RIVER_OFFSET); p.rotate(p.PI); }
-          if (index === 3) { p.translate(-RIVER_OFFSET - 40, 0); p.rotate(p.HALF_PI); }
+          if (index === 3) { p.translate(-RIVER_OFFSET - (40*s), 0); p.rotate(p.HALF_PI); }
           
           const startX = -(cols * w) / 2;
           tiles.forEach((tile: Tile, i: number) => {
               const r = Math.floor(i / cols);
               const c = i % cols;
-              drawTile(p, startX + c*w, r*(h-6), tile, w, h, 'FLAT');
+              drawTile(p, startX + c*w, r*(h-(6*s)), tile, w, h, 'FLAT');
           });
           p.pop();
       }
 
-      // Fixed Anchor Meld Drawer
-      const drawMeldsFixed = (p: any, melds: Meld[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'FLAT') => {
+      const drawMeldsFixed = (p: any, melds: Meld[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'FLAT', gap: number) => {
           if (!melds || melds.length === 0) return;
           let cx = startX;
-          const MELD_GAP = 8;
           
           melds.forEach(meld => {
              const count = meld.tiles.length;
              // Draw tiles for this meld
              for(let i=0; i<count; i++) {
+                 // If dir=1 (L->R), we draw at cx. 
                  const drawX = dir === 1 ? cx : cx - w;
                  // Align bottom of tile to y
-                 drawTile(p, drawX, y + (60 * 0.85 - h), meld.tiles[i], w, h, type); 
+                 drawTile(p, drawX, y + ((60*globalScale) * 0.85 - h), meld.tiles[i], w, h, type); 
                  cx += (w * dir);
              }
-             cx += (MELD_GAP * dir);
+             cx += (gap * dir);
           });
       };
 
-      const drawHandSequence = (p: any, hand: Tile[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'STANDING' | 'BACK_STANDING' | 'SIDE_STANDING', hasNewTile: boolean, playerIdx: number) => {
+      const drawHandSequence = (p: any, hand: Tile[], startX: number, y: number, w: number, h: number, dir: 1 | -1, type: 'STANDING' | 'BACK_STANDING' | 'SIDE_STANDING', hasNewTile: boolean, playerIdx: number, newTileGap: number) => {
           const count = hand.length;
           const gapIndex = hasNewTile ? count - 1 : -1;
-          const NEW_TILE_GAP = 20;
           
           let cx = startX;
           for (let i = 0; i < count; i++) {
-              if (i === gapIndex) cx += (NEW_TILE_GAP * dir);
+              if (i === gapIndex) cx += (newTileGap * dir);
               const drawX = dir === 1 ? cx : cx - w;
               let renderY = y;
-              if (playerIdx === 0 && i === hoveredTileIndex) renderY -= 20;
+              if (playerIdx === 0 && i === hoveredTileIndex) renderY -= (20 * globalScale);
               drawTile(p, drawX, renderY, hand[i], w, h, type);
               cx += (w * dir);
           }
@@ -679,31 +786,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
          const ctx = p.drawingContext;
          const BACK_COLOR = '#064e3b'; 
          const FACE_COLOR = '#fdfbf7'; 
-         
+         const depth = type === 'STANDING' ? 6 : (type === 'FLAT' ? 4 : 5);
+         const sDepth = depth * globalScale;
+
          if (type === 'STANDING') {
              p.noStroke();
-             p.fill(0,0,0, 60); p.rect(6, 6, w, h, 6); 
-             p.fill(BACK_COLOR); p.rect(0, 0, w, h, 6);
-             p.fill('#e2e8f0'); p.rect(0, -2, w, h, 6);
-             p.fill(FACE_COLOR); p.rect(0, -4, w, h, 6);
-             if (tile) drawTileFace(p, tile, w, h, -4);
+             p.fill(0,0,0, 60); p.rect(sDepth, sDepth, w, h, sDepth); 
+             p.fill(BACK_COLOR); p.rect(0, 0, w, h, sDepth);
+             p.fill('#e2e8f0'); p.rect(0, -2*globalScale, w, h, sDepth);
+             p.fill(FACE_COLOR); p.rect(0, -4*globalScale, w, h, sDepth);
+             if (tile) drawTileFace(p, tile, w, h, -4*globalScale);
          } else if (type === 'FLAT') {
              p.noStroke();
-             p.fill(0,0,0, 50); p.rect(3, 3, w, h, 4);
+             p.fill(0,0,0, 50); p.rect(sDepth*0.8, sDepth*0.8, w, h, 4);
              p.fill(BACK_COLOR); p.rect(0, 0, w, h, 4);
-             p.fill(FACE_COLOR); p.rect(0, -5, w, h, 4); 
-             if (tile) drawTileFace(p, tile, w, h, -5);
+             p.fill(FACE_COLOR); p.rect(0, -5*globalScale, w, h, 4); 
+             if (tile) drawTileFace(p, tile, w, h, -5*globalScale);
          } else if (type === 'BACK_STANDING') {
              p.noStroke();
-             p.fill(0,0,0, 50); p.rect(4, 4, w, h, 5);
+             p.fill(0,0,0, 50); p.rect(sDepth*0.8, sDepth*0.8, w, h, 5);
              p.fill(BACK_COLOR); p.rect(0, 0, w, h, 5);
              // Highlight
              p.fill(255,255,255,40); p.rect(0,0,w,h/3,5,5,0,0);
          } else if (type === 'SIDE_STANDING') {
              p.noStroke();
-             p.fill(0,0,0, 50); p.rect(3, 3, w, h, 2);
+             p.fill(0,0,0, 50); p.rect(sDepth*0.6, sDepth*0.6, w, h, 2);
              p.fill(BACK_COLOR); p.rect(0, 0, w, h, 2);
-             p.fill('#047857'); p.rect(0, 0, w, 4, 2); // Darker top
+             p.fill('#047857'); p.rect(0, 0, w, 4*globalScale, 2); 
          }
          p.pop();
       };
@@ -753,18 +862,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
           hoveredTileIndex = -1;
           const mX = p.mouseX;
           const mY = p.mouseY;
-          const handY = p.height - BOTTOM_Y_OFFSET;
-          if (mY > handY - 50 && mY < handY + 50) {
+          const handY = p.height - (130 * globalScale);
+          // Hit zone height tolerance
+          if (mY > handY - 60 && mY < handY + 60) {
               if (p0HandStartX !== 0) {
                   const relativeX = mX - p0HandStartX;
                   if (relativeX >= 0) {
                       const p0HandLen = gameRef.current.players[0].hand.length;
                       const isNewTileState = p0HandLen % 3 === 2;
-                      const normalWidth = (isNewTileState ? p0HandLen - 1 : p0HandLen) * TILE_W;
+                      const effectiveW = p0TileW || 44;
+                      const normalWidth = (isNewTileState ? p0HandLen - 1 : p0HandLen) * effectiveW;
+                      
                       if (isNewTileState && relativeX > normalWidth) {
-                          if (relativeX > normalWidth + 20) hoveredTileIndex = p0HandLen - 1;
+                          if (relativeX > normalWidth + (20 * globalScale)) hoveredTileIndex = p0HandLen - 1;
                       } else if (relativeX <= normalWidth) {
-                           const idx = Math.floor(relativeX / TILE_W);
+                           const idx = Math.floor(relativeX / effectiveW);
                            if (idx < p0HandLen) hoveredTileIndex = idx;
                       }
                   }
@@ -834,7 +946,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
 
       {/* --- ACTION MENU OVERLAY --- */}
       {availableActions.length > 0 && (
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
+        <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-50 flex gap-4 animate-bounce-in">
             <div className="flex gap-4 p-2 bg-black/60 backdrop-blur-xl rounded-2xl border border-yellow-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
                 {/* Always show Pass */}
                 <button 
