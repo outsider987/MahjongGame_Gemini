@@ -39,7 +39,7 @@ export class MockBackend implements IMockContext {
   
   public currentState: IGameState | null = null;
   private timeouts: any[] = [];
-  public _timerInterval: any = null; 
+  // Removed local _timerInterval to use store's one
 
   constructor() {
     this.socket = new MockSocket(this);
@@ -91,9 +91,9 @@ export class MockBackend implements IMockContext {
   public clearTimers() {
     this.timeouts.forEach(t => clearTimeout(t));
     this.timeouts = [];
-    if (this._timerInterval) {
-        clearInterval(this._timerInterval);
-        this._timerInterval = null;
+    if (this.store._timerInterval) {
+        clearInterval(this.store._timerInterval);
+        this.store._timerInterval = null;
     }
   }
 }

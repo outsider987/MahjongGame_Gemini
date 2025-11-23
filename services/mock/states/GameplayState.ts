@@ -157,7 +157,15 @@ export class GameplayState implements IGameState {
 
   private performDiscard(ctx: IMockContext, playerIdx: number, tileIndex: number) {
       const player = ctx.store.players[playerIdx];
-      if (tileIndex < 0 || tileIndex >= player.hand.length) return;
+      
+      if (tileIndex < 0 || tileIndex >= player.hand.length) {
+          if (playerIdx !== 0 && player.hand.length > 0) {
+              // Bot fallback: discard the last tile (usually the drawn one) or 0
+              tileIndex = player.hand.length - 1; 
+          } else {
+              return;
+          }
+      }
 
       const tile = player.hand.splice(tileIndex, 1)[0];
       if (player.info.isRichii && player.info.richiiDiscardIndex === -1) {
@@ -362,6 +370,10 @@ export class GameplayState implements IGameState {
       ctx.store.dto.turn = playerIdx;
       this.broadcast(ctx);
       this.startTimer(ctx);
+
+      if (playerIdx !== 0) {
+          ctx.schedule(() => this.botTurn(ctx), 1500);
+      }
   }
 
   private handleKongReplacement(ctx: IMockContext, playerIdx: number) {
@@ -380,6 +392,10 @@ export class GameplayState implements IGameState {
           ctx.store.dto.state = 'DISCARD';
           ctx.store.dto.turn = playerIdx;
           this.startTimer(ctx);
+          
+          if (playerIdx !== 0) {
+              ctx.schedule(() => this.botTurn(ctx), 1500);
+          }
       }
   }
 
@@ -397,7 +413,7 @@ export class GameplayState implements IGameState {
           ctx.store.dto.actionTimer--;
           if (ctx.store.dto.actionTimer <= 0) {
               clearInterval(ctx.store._timerInterval);
-              // In real logic, force auto-discard here
+              this.handleTimeout(ctx);
           }
           this.broadcast(ctx);
       }, 1000);
@@ -465,6 +481,26 @@ export class GameplayState implements IGameState {
 
       this.broadcast(ctx);
       ctx.clearTimers();
+  }
+  
+  private handleTimeout(ctx: IMockContext) {
+      // Auto-handle based on state
+      if (this.subState === 'RESOLVE') {
+          // If waiting for user to claim (Pong/Chow...), auto-pass
+          // Only do this if player 0 is actually involved, otherwise logic might be weird
+          // but RESOLVE with timer usually implies human input is needed.
+          this.handleOperation(ctx, 'PASS');
+      } else if (this.subState === 'DISCARD' || this.subState === 'THINKING') {
+          // Auto-discard for the current player
+          const pIdx = this.turnIdx;
+          const player = ctx.store.players[pIdx];
+          
+          if (player.hand.length > 0) {
+              // Discard the right-most tile (usually the drawn tile)
+              // This is a safe default for timeouts
+              this.performDiscard(ctx, pIdx, player.hand.length - 1);
+          }
+      }
   }
   
   private broadcast(ctx: IMockContext) {
