@@ -273,6 +273,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
       let globalScale = 1;
 
       p.setup = () => {
+        // MOBILE OPTIMIZATION:
+        // Set Pixel Density to 1 to avoid Retina/High-DPI scaling issues (lag)
+        p.pixelDensity(1); 
+        
         const canvas = p.createCanvas(window.innerWidth, window.innerHeight);
         canvas.parent(renderRef.current!);
         p.frameRate(60); 
@@ -283,13 +287,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
         canvas.mousePressed(() => {
             SoundService.init();
         });
+        // Handle touch start for mobile sound init
+        canvas.touchStarted(() => {
+             SoundService.init();
+             // Prevent default browser scrolling behavior on canvas
+             return false; 
+        });
       };
 
       p.windowResized = () => {
+        // IMPORTANT: Resize canvas when device rotates or browser resizes
         p.resizeCanvas(window.innerWidth, window.innerHeight);
       };
 
       p.draw = () => {
+        // Recalculate scale every frame to handle smooth resizing/rotation animations
         globalScale = Math.min(1.2, Math.max(0.6, p.width / 1280));
         
         // Apply Screen Shake Decay
@@ -406,10 +418,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const activePlayer = gameRef.current.players[activePlayerIndex]?.info || INITIAL_MOCK_STATE.players[0].info;
 
   return (
-    <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef}>
+    // Added touch-action: none to prevent browser gestures
+    <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden select-none" ref={renderRef} style={{ touchAction: 'none' }}>
       
-      <div className="absolute top-4 left-4 z-50 flex items-center gap-3 animate-fade-in">
-           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg transition-all hover:bg-black/60 cursor-default group select-none">
+      <div className="absolute top-4 left-4 z-50 flex items-center gap-3 animate-fade-in pointer-events-none">
+           <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg transition-all hover:bg-black/60 cursor-default group select-none pointer-events-auto">
                <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${isConnected ? 'bg-green-500 text-green-500' : 'bg-red-500 text-red-500'} animate-pulse`}></span>
                <span className="text-yellow-500 text-xs font-bold font-mono tracking-wider">ROOM 80440</span>
                <div className="w-[1px] h-3 bg-white/20 mx-1"></div>

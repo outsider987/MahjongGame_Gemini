@@ -37,7 +37,7 @@ export class MockBackend implements IMockContext {
   public store: MockStateStore;
   public bot: MockBot;
   
-  private currentState: IGameState | null = null;
+  public currentState: IGameState | null = null;
   private timeouts: any[] = [];
   public _timerInterval: any = null; 
 

@@ -6,7 +6,7 @@ import { socketService } from '../services/SocketService';
 import { 
   ArrowLeft, Zap, Layers, Trash2, Box, Grid, 
   Play, RotateCcw, Hand, LayoutGrid, X,
-  ChevronRight, ChevronLeft, Droplets
+  ChevronRight, ChevronLeft, Droplets, Trophy
 } from 'lucide-react';
 
 interface DebugSceneProps {
@@ -146,8 +146,15 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
              backend.store.dto.availableActions = [];
              refreshState(backend);
         } else if (state === 'FORCE_HU') {
+             // Just show the button
              backend.store.dto.availableActions = ['HU', 'RICHII'];
              refreshState(backend);
+        } else if (state === 'INSTANT_WIN') {
+             // Force the backend to trigger HU logic immediately
+             // We use the mock event handler directly
+             if (backend.currentState) {
+                 backend.handleClientEvent('action:operate', 'HU');
+             }
         }
     };
 
@@ -173,7 +180,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                         <Box className="text-yellow-500" />
                         DEBUG MODE
                      </h2>
-                     <p className="text-xs text-gray-500 mt-1 font-mono">DevTools v1.0</p>
+                     <p className="text-xs text-gray-500 mt-1 font-mono">DevTools v1.1</p>
                 </div>
 
                 {/* Tabs */}
@@ -283,8 +290,11 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                                     <button onClick={() => forceState('FORCE_DISCARD')} className="w-full bg-gray-700/50 hover:bg-gray-600/60 text-gray-200 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
                                         Force Discard Phase
                                     </button>
-                                    <button onClick={() => forceState('FORCE_HU')} className="w-full bg-red-900/40 hover:bg-red-800/60 text-red-200 border border-red-700/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
-                                        Enable HU Button
+                                    <button onClick={() => forceState('FORCE_HU')} className="w-full bg-yellow-600/40 hover:bg-yellow-500/60 text-yellow-200 border border-yellow-500/50 py-2 rounded-lg text-xs font-bold backdrop-blur-sm">
+                                        Show HU Button
+                                    </button>
+                                    <button onClick={() => forceState('INSTANT_WIN')} className="w-full bg-red-600/70 hover:bg-red-500/80 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 backdrop-blur-sm">
+                                        <Trophy size={16} /> Instant Win
                                     </button>
                                 </div>
                              </div>

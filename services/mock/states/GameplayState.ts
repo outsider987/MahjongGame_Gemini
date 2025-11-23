@@ -234,6 +234,13 @@ export class GameplayState implements IGameState {
               return; 
           }
       }
+      
+      // [CHANGED] Allow HU at any point (Zimo)
+      if (action === 'HU') {
+          this.executeAction(ctx, 0, 'HU');
+          return;
+      }
+
       if (this.subState !== 'RESOLVE') return;
       if (action === 'PASS') {
           ctx.store.dto.availableActions = [];
@@ -257,15 +264,20 @@ export class GameplayState implements IGameState {
   }
 
   private executeAction(ctx: IMockContext, playerIdx: number, type: ActionType) {
-      const discard = ctx.store.dto.lastDiscard!.tile;
-      const fromPlayer = ctx.store.dto.lastDiscard!.playerIndex;
-      const player = ctx.store.players[playerIdx];
-      const pos = ctx.store.getPlayerPos(playerIdx);
-
+      // [CHANGED] Handle HU logic (Zimo or Ron) first to prevent accessing discard if it doesn't exist
       if (type === 'HU') {
-          this.executeWin(ctx, playerIdx, false);
+          const isZimo = (this.turnIdx === playerIdx);
+          this.executeWin(ctx, playerIdx, isZimo);
           return;
       }
+
+      // For other actions (PONG/KONG/CHOW), we need a valid discard in the state
+      if (!ctx.store.dto.lastDiscard) return;
+
+      const discard = ctx.store.dto.lastDiscard.tile;
+      const fromPlayer = ctx.store.dto.lastDiscard.playerIndex;
+      const player = ctx.store.players[playerIdx];
+      const pos = ctx.store.getPlayerPos(playerIdx);
 
       ctx.store.players[fromPlayer].discards.pop();
       ctx.store.dto.lastDiscard = null;
