@@ -74,7 +74,7 @@ export class GameplayState implements IGameState {
               return;
           }
           player.hand.push(newTile);
-          ctx.store.sortHand(playerIdx);
+          ctx.store.sortHand(playerIdx, true);
       }
 
       ctx.store.dto.availableActions = [];
@@ -173,7 +173,7 @@ export class GameplayState implements IGameState {
       }
 
       player.discards.push(tile);
-      ctx.store.sortHand(playerIdx);
+      ctx.store.sortHand(playerIdx, false);
 
       ctx.store.dto.lastDiscard = { tile, playerIndex: playerIdx };
       ctx.store.dto.availableActions = [];

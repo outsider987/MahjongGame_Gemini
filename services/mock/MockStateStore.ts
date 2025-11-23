@@ -108,8 +108,15 @@ export class MockStateStore {
     }));
   }
 
-  sortHand(playerIdx: number) {
-      this.players[playerIdx].hand.sort((a, b) => {
+  sortHand(playerIdx: number, keepLastSeparate: boolean = false) {
+      const player = this.players[playerIdx];
+      let lastTile: Tile | undefined;
+
+      if (keepLastSeparate && player.hand.length > 0) {
+          lastTile = player.hand.pop();
+      }
+
+      player.hand.sort((a, b) => {
         // Sort Flowers to end or keep logic consistent, though they should be removed
         if (a.suit === Suit.FLOWERS && b.suit !== Suit.FLOWERS) return 1;
         if (a.suit !== Suit.FLOWERS && b.suit === Suit.FLOWERS) return -1;
@@ -121,5 +128,9 @@ export class MockStateStore {
         }
         return a.value - b.value;
       });
+
+      if (lastTile) {
+          player.hand.push(lastTile);
+      }
   }
 }
