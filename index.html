@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+    <title>麻將大師會所</title>
+    <!-- Keep Tailwind CDN for simplicity -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Keep p5.js CDN as the code relies on window.p5 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap');
+      body {
+        font-family: 'Roboto', 'Noto Serif TC', sans-serif;
+        background-color: #1a1a1a;
+        overflow: hidden; /* Prevent scrolling during game */
+        touch-action: none; /* Prevent standard touch actions (scrolling/zooming) */
+      }
+      /* Custom scrollbar for tables */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #3d1c1c;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #a16207;
+        border-radius: 4px;
+      }
+    </style>
+
+  <script type="importmap">
+{
+  "imports": {
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "socket.io-client": "https://aistudiocdn.com/socket.io-client@^4.8.1"
+  }
+}
+</script>
+  <script type="module" crossorigin src="./assets/index-BKWArw_2.js"></script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
