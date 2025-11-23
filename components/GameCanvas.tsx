@@ -257,7 +257,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
   const handlePlayerAction = (action: ActionType) => {
       SoundService.playClick();
       socketService.sendAction(action);
-      setAvailableActions([]); 
+      // Don't clear availableActions immediately - wait for backend confirmation
+      // This allows the user to see the buttons until the backend processes the action
   };
 
   const handleRestart = () => {

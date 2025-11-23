@@ -232,6 +232,11 @@ export class GameplayState implements IGameState {
               ctx.store.dto.availableActions = ctx.store.dto.availableActions.filter(a => a !== 'RICHII');
               this.broadcast(ctx);
               return; 
+          } else {
+              // Invalid RICHII action - clear actions and continue
+              ctx.store.dto.availableActions = [];
+              this.broadcast(ctx);
+              return;
           }
       }
       
@@ -241,7 +246,13 @@ export class GameplayState implements IGameState {
           return;
       }
 
-      if (this.subState !== 'RESOLVE') return;
+      if (this.subState !== 'RESOLVE') {
+          // Invalid state for this action - clear actions and continue
+          ctx.store.dto.availableActions = [];
+          this.broadcast(ctx);
+          return;
+      }
+      
       if (action === 'PASS') {
           ctx.store.dto.availableActions = [];
           this.broadcast(ctx);
@@ -249,6 +260,8 @@ export class GameplayState implements IGameState {
           this.resolveBestAction(ctx);
           return;
       }
+      
+      // Execute the action (CHOW, PONG, KONG)
       this.executeAction(ctx, 0, action);
   }
 
@@ -272,7 +285,20 @@ export class GameplayState implements IGameState {
       }
 
       // For other actions (PONG/KONG/CHOW), we need a valid discard in the state
-      if (!ctx.store.dto.lastDiscard) return;
+      if (!ctx.store.dto.lastDiscard) {
+          // Invalid action - clear actions and continue game
+          ctx.store.dto.availableActions = [];
+          this.broadcast(ctx);
+          // If we're in RESOLVE state but no discard, continue to next turn
+          if (this.subState === 'RESOLVE') {
+              this.pendingClaims = [];
+              // Use turnIdx if available, otherwise use current turn from DTO
+              const currentPlayer = this.turnIdx !== undefined ? this.turnIdx : ctx.store.dto.turn;
+              const next = (currentPlayer + 1) % 4;
+              this.nextTurn(ctx, next);
+          }
+          return;
+      }
 
       const discard = ctx.store.dto.lastDiscard.tile;
       const fromPlayer = ctx.store.dto.lastDiscard.playerIndex;
@@ -281,6 +307,7 @@ export class GameplayState implements IGameState {
 
       ctx.store.players[fromPlayer].discards.pop();
       ctx.store.dto.lastDiscard = null;
+      ctx.store.dto.availableActions = []; // Clear actions after successful execution
 
       if (type === 'PONG') {
           let removed = 0;
@@ -316,6 +343,15 @@ export class GameplayState implements IGameState {
                const meldTiles = [...combo, discard].sort((a,b) => a.value - b.value);
                player.melds.push({ type: 'CHOW', tiles: meldTiles, fromPlayer });
                ctx.socket.trigger('game:effect', { type: 'ACTION_CHOW', text: '吃', position: pos });
+          } else {
+              // CHOW failed - clear actions and continue
+              ctx.store.dto.availableActions = [];
+              this.broadcast(ctx);
+              if (this.subState === 'RESOLVE') {
+                  this.pendingClaims = this.pendingClaims.filter(c => c.playerIdx !== playerIdx || c.type !== 'CHOW');
+                  this.resolveBestAction(ctx);
+              }
+              return;
           }
       }
       
