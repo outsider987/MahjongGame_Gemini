@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8080
+      - VITE_WS_URL=ws://localhost:8080
+    networks:
+      - mahjong-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_MODE=release
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=mahjong
+      - DB_PASSWORD=mahjong_secret
+      - DB_NAME=mahjong_db
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-key-change-in-production}
+      - LINE_CHANNEL_ID=${LINE_CHANNEL_ID:-}
+      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET:-}
+    networks:
+      - mahjong-network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: mahjong_db
+      MYSQL_USER: mahjong
+      MYSQL_PASSWORD: mahjong_secret
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - mahjong-network
+    restart: unless-stopped
+
+networks:
+  mahjong-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+

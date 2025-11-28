@@ -1,0 +1,20 @@
+server:
+  port: "8080"
+  mode: "debug"
+
+database:
+  host: "localhost"
+  port: "3306"
+  user: "mahjong"
+  password: "mahjong_secret"
+  name: "mahjong_db"
+
+jwt:
+  secret: "your-super-secret-key-change-in-production"
+  expirationHours: 72
+
+line:
+  channelId: ""
+  channelSecret: ""
+  callbackUrl: "http://localhost:8080/api/auth/line/callback"
+

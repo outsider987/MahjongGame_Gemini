@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
-import { Users, Search, Plus, LogOut, Trophy, Settings, Wrench } from 'lucide-react';
+import { Users, Search, Plus, LogOut, Trophy, Settings, Wrench, User } from 'lucide-react';
 import { AppView } from '../types';
 import { Button } from './ui/Button';
 import { MOCK_PLAYERS, MOCK_ROOMS } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
+import { AuthModal } from './AuthModal';
 
 interface LobbyProps {
   setView: (view: AppView) => void;
@@ -12,6 +14,16 @@ interface LobbyProps {
 export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
   const [activeTab, setActiveTab] = useState<'ROOMS' | 'RECORDS' | 'RANK'>('ROOMS');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+
+  const handleGameAction = (action: () => void) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    action();
+  };
 
   return (
     <div className="w-full h-screen bg-gradient-to-b from-red-900 to-[#3d0c0c] text-white overflow-hidden relative font-sans">
@@ -39,7 +51,9 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-yellow-200 drop-shadow-md">麻將大師會所</h1>
-            <p className="text-xs text-yellow-100 opacity-80">ID: 100001 | 成員: 100</p>
+            <p className="text-xs text-yellow-100 opacity-80">
+              {isAuthenticated ? `歡迎, ${user?.display_name}` : '請先登入'}
+            </p>
           </div>
         </div>
         
@@ -57,11 +71,43 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
              </span>
           </button>
 
-          <div className="bg-black/40 px-3 py-1 rounded-full border border-yellow-600 flex items-center gap-2 shadow-inner">
-            <div className="w-4 h-4 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_#fbbf24]"></div>
-            <span className="text-yellow-400 font-mono font-bold">1,250 房卡</span>
-          </div>
-          <Button variant="gold" className="text-sm py-1 px-3" onClick={() => {}}>更多</Button>
+          {isAuthenticated && (
+            <div className="bg-black/40 px-3 py-1 rounded-full border border-yellow-600 flex items-center gap-2 shadow-inner">
+              <div className="w-4 h-4 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_#fbbf24]"></div>
+              <span className="text-yellow-400 font-mono font-bold">
+                {user?.total_score?.toLocaleString() || 0} 分
+              </span>
+            </div>
+          )}
+
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/20">
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-full" />
+                ) : (
+                  <User size={16} className="text-yellow-400" />
+                )}
+                <span className="text-sm text-white">{user?.display_name}</span>
+              </div>
+              <Button 
+                variant="danger" 
+                className="text-sm py-1 px-3" 
+                onClick={logout}
+              >
+                <LogOut size={14} className="mr-1" />
+                登出
+              </Button>
+            </div>
+          ) : (
+            <Button 
+              variant="gold" 
+              className="text-sm py-1 px-3" 
+              onClick={() => setShowAuthModal(true)}
+            >
+              登入 / 註冊
+            </Button>
+          )}
         </div>
       </div>
 
@@ -149,14 +195,14 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
                      <Button 
                         variant="gold" 
                         className="px-8 py-4 text-xl flex items-center gap-2 shadow-orange-900/50 transition-transform hover:scale-105"
-                        onClick={() => setView(AppView.GAME)}
+                        onClick={() => handleGameAction(() => setView(AppView.GAME))}
                      >
                         <Search className="w-6 h-6" /> 快速加入
                      </Button>
                      <Button 
                         variant="primary" 
                         className="px-8 py-4 text-xl flex items-center gap-2 shadow-red-900/50 transition-transform hover:scale-105"
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={() => handleGameAction(() => setShowCreateModal(true))}
                      >
                         <Plus className="w-6 h-6" /> 開設房間
                      </Button>
@@ -191,7 +237,7 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
                             </div>
                             <Button 
                                 className="w-full mt-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition-opacity" 
-                                onClick={() => setView(AppView.GAME)}
+                                onClick={() => handleGameAction(() => setView(AppView.GAME))}
                             >
                                 進入房間
                             </Button>
@@ -269,6 +315,13 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
               </div>
           </div>
       )}
+
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => setShowAuthModal(false)}
+      />
     </div>
   );
 };
