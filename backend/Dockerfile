@@ -33,9 +33,14 @@ RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
 
+# Copy config.yaml to load configuration
+COPY --from=builder /app/config.yaml ./config.yaml
+
 # Expose port
 EXPOSE 8080
 
 # Run the application
+# Configuration will be loaded from config.yaml
+# Environment variables can still override config.yaml values if needed
 CMD ["./main"]
 

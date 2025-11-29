@@ -71,14 +71,18 @@ func Load() (*Config, error) {
 	_ = viper.ReadInConfig()
 
 	// Bind environment variables explicitly
+	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("server.mode", "SERVER_MODE")
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASSWORD")
 	viper.BindEnv("database.name", "DB_NAME")
 	viper.BindEnv("jwt.secret", "JWT_SECRET")
+	viper.BindEnv("jwt.expirationHours", "JWT_EXPIRATION_HOURS")
 	viper.BindEnv("line.channelId", "LINE_CHANNEL_ID")
 	viper.BindEnv("line.channelSecret", "LINE_CHANNEL_SECRET")
+	viper.BindEnv("line.callbackUrl", "LINE_CALLBACK_URL")
 
 	config := &Config{
 		Server: ServerConfig{
