@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AppView, GameStateDTO, Player, Tile, ActionType, VisualEffect } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { GameStateDTO, Player, Tile, ActionType, VisualEffect } from '../types';
 import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
 import { socketService } from '../services/SocketService';
@@ -12,10 +13,6 @@ declare global {
   interface Window {
     p5: any;
   }
-}
-
-interface GameCanvasProps {
-  setView: (view: AppView) => void;
 }
 
 // Mock Initial State for rendering before connection or if connection fails
@@ -34,7 +31,8 @@ const INITIAL_MOCK_STATE: GameStateDTO = {
     availableActions: []
 };
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
+export const GameCanvas: React.FC = () => {
+  const navigate = useNavigate();
   const renderRef = useRef<HTMLDivElement>(null);
   const p5Ref = useRef<any>(null);
   
@@ -474,7 +472,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ setView }) => {
                        </button>
                        
                        <button 
-                           onClick={() => setView(AppView.LOBBY)}
+                           onClick={() => navigate('/lobby')}
                            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-300 hover:bg-red-900/30 hover:text-red-200 transition-all text-left group"
                        >
                            <div className="p-1.5 bg-red-500/20 text-red-400 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">

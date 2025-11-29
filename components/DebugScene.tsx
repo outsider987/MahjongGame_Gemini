@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { AppView, Suit, Tile } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { Suit, Tile } from '../types';
 import { GameCanvas } from './GameCanvas';
 import { socketService } from '../services/SocketService';
 import { 
@@ -9,13 +10,10 @@ import {
   ChevronRight, ChevronLeft, Droplets, Trophy
 } from 'lucide-react';
 
-interface DebugSceneProps {
-    setView: (view: AppView) => void;
-}
-
 type TabType = 'TABLE' | 'EFFECTS' | 'HANDS' | 'GAME';
 
-export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
+export const DebugScene: React.FC = () => {
+  const navigate = useNavigate();
     const [isPanelOpen, setIsPanelOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('TABLE');
 
@@ -161,7 +159,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
     return (
         <div className="relative w-full h-full bg-black">
             {/* The Real Canvas */}
-            <GameCanvas setView={setView} />
+            <GameCanvas />
 
             {/* Debug Sidebar */}
             <div className={`absolute top-0 right-0 h-full bg-black/60 backdrop-blur-md border-l border-white/10 shadow-2xl transition-all duration-300 z-[100] flex flex-col ${isPanelOpen ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
@@ -306,7 +304,7 @@ export const DebugScene: React.FC<DebugSceneProps> = ({ setView }) => {
                 {/* Footer */}
                 <div className="p-4 border-t border-white/10 bg-black/30">
                     <button 
-                        onClick={() => setView(AppView.LOBBY)}
+                        onClick={() => navigate('/lobby')}
                         className="w-full flex items-center justify-center gap-2 text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
                     >
                         <ArrowLeft size={16} />

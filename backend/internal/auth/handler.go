@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/victor/mahjong-backend/internal/config"
 	"github.com/victor/mahjong-backend/internal/user"
 	"github.com/victor/mahjong-backend/pkg/response"
 )
@@ -98,7 +99,7 @@ func (h *Handler) LINELogin(c *gin.Context) {
 }
 
 // LINECallback handles LINE OAuth callback
-func (h *Handler) LINECallback(c *gin.Context) {
+func (h *Handler) LINECallback(c *gin.Context, cfg *config.Config) {
 	code := c.Query("code")
 	state := c.Query("state")
 	errorParam := c.Query("error")
@@ -133,8 +134,11 @@ func (h *Handler) LINECallback(c *gin.Context) {
 	u, err := h.userService.GetByLineUserID(profile.UserID)
 	if err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
-			// Create new user
-			u, err = h.userService.CreateFromLINE(profile.UserID, profile.DisplayName, profile.PictureURL)
+			u, err = h.userService.CreateFromLINE(
+				profile.UserID,
+				profile.DisplayName,
+				profile.PictureURL,
+			)
 			if err != nil {
 				response.InternalServerError(c, "Failed to create user")
 				return
@@ -152,12 +156,9 @@ func (h *Handler) LINECallback(c *gin.Context) {
 		return
 	}
 
-	// Redirect to frontend with token
-	// In production, use a proper redirect with token in URL fragment
-	c.HTML(http.StatusOK, "", gin.H{
-		"token": token,
-		"user":  u.ToPublic(),
-	})
+	// Redirect to frontend
+	redirectURL := cfg.Frontend.URL + "/line/callback?token=" + token
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 // GetProfile returns the current user's profile

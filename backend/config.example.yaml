@@ -18,3 +18,5 @@ line:
   channelSecret: ""
   callbackUrl: "https://line-login-demo-lyart.vercel.app/api/line-callback"
 
+frontend:
+  url: "http://localhost:3000"

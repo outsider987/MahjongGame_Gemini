@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authService, User, LoginInput, RegisterInput, AuthResponse } from '../services/AuthService';
 
 interface AuthContextType {
@@ -10,6 +10,7 @@ interface AuthContextType {
   loginWithLine: () => void;
   logout: () => void;
   getToken: () => string | null;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,17 +20,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check for LINE callback token in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const lineToken = urlParams.get('token');
-    
-    if (lineToken) {
-      // Clear URL params
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Token would be handled by LINE callback - for now just reload user
-    }
-
-    // Load user from storage
+    // Load user from storage on mount
     setUser(authService.getUser());
   }, []);
 
@@ -70,6 +61,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getToken = () => authService.getToken();
 
+  const setUserState = useCallback((user: User | null) => {
+    setUser(user);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -81,6 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loginWithLine,
         logout,
         getToken,
+        setUser: setUserState,
       }}
     >
       {children}

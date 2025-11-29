@@ -1,17 +1,14 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Users, Search, Plus, LogOut, Trophy, Settings, Wrench, User } from 'lucide-react';
-import { AppView } from '../types';
 import { Button } from './ui/Button';
 import { MOCK_PLAYERS, MOCK_ROOMS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './AuthModal';
 
-interface LobbyProps {
-  setView: (view: AppView) => void;
-}
-
-export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
+export const Lobby: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'ROOMS' | 'RECORDS' | 'RANK'>('ROOMS');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -60,7 +57,7 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
         <div className="flex items-center gap-4">
           {/* DEBUG BUTTON */}
           <button 
-            onClick={() => setView(AppView.DEBUG)}
+            onClick={() => navigate('/debug')}
             className="p-2 bg-gray-800/50 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white border border-gray-600 transition-colors group relative"
             title="開發者工具 (Debug Mode)"
           >
@@ -195,7 +192,7 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
                      <Button 
                         variant="gold" 
                         className="px-8 py-4 text-xl flex items-center gap-2 shadow-orange-900/50 transition-transform hover:scale-105"
-                        onClick={() => handleGameAction(() => setView(AppView.GAME))}
+                        onClick={() => handleGameAction(() => navigate('/game'))}
                      >
                         <Search className="w-6 h-6" /> 快速加入
                      </Button>
@@ -237,7 +234,7 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
                             </div>
                             <Button 
                                 className="w-full mt-4 py-2 text-sm opacity-90 group-hover:opacity-100 transition-opacity" 
-                                onClick={() => handleGameAction(() => setView(AppView.GAME))}
+                                onClick={() => handleGameAction(() => navigate('/game'))}
                             >
                                 進入房間
                             </Button>
@@ -308,7 +305,7 @@ export const Lobby: React.FC<LobbyProps> = ({ setView }) => {
                           <Button variant="danger" className="flex-1" onClick={() => setShowCreateModal(false)}>取消</Button>
                           <Button variant="primary" className="flex-1 shadow-lg shadow-red-500/30" onClick={() => {
                               setShowCreateModal(false);
-                              setView(AppView.GAME);
+                              navigate('/game');
                           }}>確認創建</Button>
                       </div>
                   </div>

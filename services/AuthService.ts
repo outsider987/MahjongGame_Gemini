@@ -76,6 +76,44 @@ class AuthService {
     }
   }
 
+  private decodeJWT(token: string): { user_id: number; display_name: string; username?: string } | null {
+    try {
+      // Split token into parts: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return null;
+      }
+
+      // Decode base64url payload (second part)
+      const payload = parts[1];
+      
+      // Base64url to base64 conversion
+      // Replace URL-safe characters and add padding if needed
+      let base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) {
+        base64 += '=';
+      }
+
+      // Decode base64 and parse JSON
+      const decoded = atob(base64);
+      const claims = JSON.parse(decoded);
+
+      // Extract required fields
+      if (!claims.user_id || !claims.display_name) {
+        return null;
+      }
+
+      return {
+        user_id: Number(claims.user_id),
+        display_name: claims.display_name,
+        username: claims.username,
+      };
+    } catch (e) {
+      console.error("Failed to decode JWT:", e);
+      return null;
+    }
+  }
+
   async register(input: RegisterInput): Promise<AuthResponse> {
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -132,6 +170,33 @@ class AuthService {
 
   getLineLoginUrl(): string {
     return `${API_URL}/api/auth/line/login`;
+  }
+
+  setTokenFromJWT(token: string): User | null {
+    // Decode JWT to get claims
+    const claims = this.decodeJWT(token);
+    if (!claims) {
+      return null;
+    }
+
+    // Create User object from JWT claims
+    const user: User = {
+      id: claims.user_id,
+      display_name: claims.display_name,
+      avatar_url: undefined,
+      total_score: 0,
+      total_games: 0,
+      total_wins: 0,
+    };
+
+    // Update internal state
+    this.token = token;
+    this.user = user;
+
+    // Save to localStorage
+    this.saveToStorage();
+
+    return user;
   }
 
   logout() {

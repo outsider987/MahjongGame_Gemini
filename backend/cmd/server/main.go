@@ -93,7 +93,7 @@ func main() {
 			authGroup.POST("/register", authHandler.Register)
 			authGroup.POST("/login", authHandler.Login)
 			authGroup.GET("/line/login", authHandler.LINELogin)
-			authGroup.GET("/line/callback", authHandler.LINECallback)
+			authGroup.GET("/line/callback", func(c *gin.Context) { authHandler.LINECallback(c, cfg) })
 		}
 
 		// Protected routes

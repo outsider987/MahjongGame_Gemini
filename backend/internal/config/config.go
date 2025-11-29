@@ -14,6 +14,11 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	LINE     LINEConfig     `mapstructure:"line"`
+	Frontend FrontendConfig `mapstructure:"frontend"`
+}
+
+type FrontendConfig struct {
+	URL string `mapstructure:"url"`
 }
 
 func (d *DatabaseConfig) DSN() string {
