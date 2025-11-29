@@ -79,7 +79,7 @@ func (b *Bot) hardDiscard(hand []*mahjong.Tile) int {
 	bestDiscard := -1
 	bestScore := 1000
 
-	for i, t := range hand {
+	for i, _ := range hand {
 		score := b.evaluateTileValue(hand, i)
 		if score < bestScore {
 			bestScore = score
@@ -171,4 +171,3 @@ func (b *Bot) shouldInteractHard(action mahjong.ActionType, hand []*mahjong.Tile
 	}
 	return false
 }
-

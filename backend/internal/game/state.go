@@ -137,11 +137,7 @@ func (gs *GameState) StartInitPhase() {
 		gs.InitData.WindAssignment[i] = windValues[windIdx]
 	}
 
-	// Deal cards after short delay (client will animate)
-	go func() {
-		time.Sleep(2 * time.Second)
-		gs.DealCards()
-	}()
+	// Note: DealCards() is now called by Room.StartGame() to ensure proper state broadcasting
 }
 
 func (gs *GameState) DealCards() {

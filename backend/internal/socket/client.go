@@ -3,6 +3,7 @@ package socket
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,6 +24,8 @@ type Client struct {
 	DisplayName string
 	RoomID      string
 	PlayerIndex int // -1 if not in a game
+	closed      bool
+	closeMu     sync.RWMutex
 }
 
 type Message struct {
@@ -115,11 +118,32 @@ func (c *Client) WritePump() {
 }
 
 func (c *Client) Send(event string, data interface{}) {
+	c.closeMu.RLock()
+	defer c.closeMu.RUnlock()
+
+	if c.closed {
+		return // Client already closed, don't send
+	}
+
 	select {
 	case c.send <- &Message{Event: event, Data: data}:
 	default:
 		log.Printf("Client %d send buffer full", c.UserID)
 	}
+}
+
+// Close marks the client as closed to prevent further sends
+func (c *Client) Close() {
+	c.closeMu.Lock()
+	c.closed = true
+	c.closeMu.Unlock()
+}
+
+// IsClosed returns whether the client is closed
+func (c *Client) IsClosed() bool {
+	c.closeMu.RLock()
+	defer c.closeMu.RUnlock()
+	return c.closed
 }
 
 // Implement GameClient interface
@@ -138,4 +162,3 @@ func (c *Client) GetPlayerIndex() int {
 func (c *Client) SetPlayerIndex(idx int) {
 	c.PlayerIndex = idx
 }
-

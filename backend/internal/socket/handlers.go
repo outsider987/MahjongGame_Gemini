@@ -115,6 +115,22 @@ func (h *Handler) handleJoin(client *Client, data json.RawMessage) {
 		return
 	}
 
+	// Check if player is already in the room (e.g., from create_room)
+	// Use HasPlayer for a more robust check that looks at actual player list
+	if room.HasPlayer(client.GetUserID()) {
+		// Already in this room, update client's room ID and send current state
+		h.hub.JoinRoom(client, req.RoomID) // Ensure hub knows about the room membership
+		playerIdx := room.GetPlayerIndex(client.GetUserID())
+		if playerIdx >= 0 {
+			client.PlayerIndex = playerIdx
+		}
+		if room.GetState() != nil {
+			personalDTO := room.GetState().ToPersonalDTO(playerIdx)
+			client.Send("game:state", personalDTO)
+		}
+		return
+	}
+
 	if err := room.AddPlayer(client); err != nil {
 		client.Send("game:error", err.Error())
 		return
@@ -132,26 +148,41 @@ func (h *Handler) handleQuickMatch(client *Client) {
 
 func (h *Handler) handleCreateRoom(client *Client, data json.RawMessage) {
 	var req struct {
-		BaseScore int `json:"baseScore"`
-		TaiScore  int `json:"taiScore"`
-		Rounds    int `json:"rounds"`
+		BaseScore     int `json:"baseScore"`
+		TaiScore      int `json:"taiScore"`
+		Rounds        int `json:"rounds"`
+		AIPlayerCount int `json:"aiPlayerCount"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil {
 		req.BaseScore = 100
 		req.TaiScore = 20
 		req.Rounds = 1
+		req.AIPlayerCount = 0
+	}
+
+	// Validate AI player count (0-3)
+	if req.AIPlayerCount < 0 {
+		req.AIPlayerCount = 0
+	}
+	if req.AIPlayerCount > 3 {
+		req.AIPlayerCount = 3
 	}
 
 	room := h.roomManager.CreateRoom(game.RoomSettings{
-		BaseScore: req.BaseScore,
-		TaiScore:  req.TaiScore,
-		Rounds:    req.Rounds,
+		BaseScore:     req.BaseScore,
+		TaiScore:      req.TaiScore,
+		Rounds:        req.Rounds,
+		AIPlayerCount: req.AIPlayerCount,
 	})
 
+	// Add human player first
 	if err := room.AddPlayer(client); err != nil {
 		client.Send("game:error", err.Error())
 		return
 	}
+
+	// Add AI players
+	room.AddAIPlayers()
 
 	h.hub.JoinRoom(client, room.ID)
 
@@ -234,4 +265,3 @@ func (h *Handler) handleLeave(client *Client) {
 	h.hub.LeaveRoom(client, client.RoomID)
 	client.Send("room:left", nil)
 }
-

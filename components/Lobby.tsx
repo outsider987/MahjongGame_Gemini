@@ -1,18 +1,39 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Search, Plus, LogOut, Trophy, Settings, Wrench, User } from 'lucide-react';
 import { Button } from './ui/Button';
 import { MOCK_PLAYERS, MOCK_ROOMS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from './AuthModal';
+import { socketService } from '../services/SocketService';
 
 export const Lobby: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'ROOMS' | 'RECORDS' | 'RANK'>('ROOMS');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [aiPlayerCount, setAiPlayerCount] = useState(3); // Default: 1 human + 3 AI
+  const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const { user, isAuthenticated, logout } = useAuth();
+
+  // Connect socket and listen for room creation
+  useEffect(() => {
+    // Ensure socket is connected
+    socketService.connect();
+
+    const handleRoomCreated = (data: { room_id: string }) => {
+      setCreatedRoomId(data.room_id);
+      // Navigate to game with room ID
+      navigate(`/game?roomId=${data.room_id}`);
+    };
+
+    socketService.on('room:created', handleRoomCreated);
+
+    return () => {
+      socketService.off('room:created', handleRoomCreated);
+    };
+  }, [navigate]);
 
   const handleGameAction = (action: () => void) => {
     if (!isAuthenticated) {
@@ -295,6 +316,26 @@ export const Lobby: React.FC = () => {
                               </div>
                           </div>
 
+                          <div className="space-y-2">
+                              <label className="block text-[#5d4037] font-bold">AI 玩家數量</label>
+                              <div className="bg-white/50 p-4 rounded-lg border border-[#d4b98c]/30">
+                                  <div className="flex items-center gap-4 mb-3">
+                                      <input 
+                                          type="range" 
+                                          min="0" 
+                                          max="3" 
+                                          value={aiPlayerCount} 
+                                          onChange={(e) => setAiPlayerCount(parseInt(e.target.value))}
+                                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600"
+                                      />
+                                      <span className="text-2xl font-bold text-red-600 w-12 text-center">{aiPlayerCount}</span>
+                                  </div>
+                                  <div className="text-sm text-[#5d4037] text-center bg-yellow-50 p-2 rounded border border-yellow-200">
+                                      <span className="font-semibold">1 位真人玩家</span> + <span className="font-semibold text-red-600">{aiPlayerCount} 位 AI 玩家</span> = <span className="font-bold text-red-700">4 位玩家</span>
+                                  </div>
+                              </div>
+                          </div>
+
                           <div className="p-4 bg-yellow-100 rounded-lg border border-yellow-300 text-sm text-yellow-800 flex gap-3 items-start">
                               <Settings className="w-5 h-5 shrink-0 mt-0.5 text-yellow-600" />
                               <p className="leading-relaxed">開始遊戲時將扣除房卡。若選擇 AA 制，所有玩家需確認支付後方可開始。</p>
@@ -304,8 +345,9 @@ export const Lobby: React.FC = () => {
                       <div className="flex gap-4 mt-8">
                           <Button variant="danger" className="flex-1" onClick={() => setShowCreateModal(false)}>取消</Button>
                           <Button variant="primary" className="flex-1 shadow-lg shadow-red-500/30" onClick={() => {
+                              // Create room with AI players
+                              socketService.createRoom(100, 20, 1, aiPlayerCount);
                               setShowCreateModal(false);
-                              navigate('/game');
                           }}>確認創建</Button>
                       </div>
                   </div>

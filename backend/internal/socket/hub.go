@@ -70,6 +70,8 @@ func (h *Hub) Run() {
 					}
 				}
 
+				// Mark client as closed before closing channel to prevent panics
+				client.Close()
 				close(client.send)
 			}
 			h.mu.Unlock()
@@ -79,6 +81,10 @@ func (h *Hub) Run() {
 			if clients, ok := h.roomClients[msg.RoomID]; ok {
 				for client := range clients {
 					if msg.Exclude != nil && client == msg.Exclude {
+						continue
+					}
+					// Check if client is closed before sending
+					if client.IsClosed() {
 						continue
 					}
 					select {
@@ -149,6 +155,9 @@ func (h *Hub) BroadcastToRoomExcept(roomID, event string, data interface{}, excl
 }
 
 func (h *Hub) SendToClient(client *Client, event string, data interface{}) {
+	if client.IsClosed() {
+		return
+	}
 	select {
 	case client.send <- &Message{Event: event, Data: data}:
 	default:

@@ -29,3 +29,6 @@ go.mod
 backend/go.sum
 backend/go.mod
 backend/config.yaml
+
+# environment variables
+.env

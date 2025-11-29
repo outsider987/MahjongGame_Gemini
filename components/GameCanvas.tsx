@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GameStateDTO, Player, Tile, ActionType, VisualEffect } from '../types';
 import { AssetLoader } from '../services/AssetLoader';
 import { RenderService, RenderMetrics } from '../services/RenderService';
@@ -33,6 +33,7 @@ const INITIAL_MOCK_STATE: GameStateDTO = {
 
 export const GameCanvas: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const renderRef = useRef<HTMLDivElement>(null);
   const p5Ref = useRef<any>(null);
   
@@ -64,17 +65,43 @@ export const GameCanvas: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // --- Socket Connection ---
   useEffect(() => {
     const socket = socketService.connect("http://localhost:8080");
+    const roomId = searchParams.get('roomId');
+    
+    // Function to join room
+    const joinRoomIfNeeded = () => {
+        if (roomId) {
+            socketService.joinRoom(roomId);
+        } else {
+            setErrorMessage("未提供房間 ID，請返回大廳建立或加入房間");
+        }
+    };
     
     socket.on("connect", () => {
         setIsConnected(true);
-        socketService.joinRoom("room_101");
+        setErrorMessage(null);
+        joinRoomIfNeeded();
     });
 
-    socket.on("disconnect", () => setIsConnected(false));
+    // If already connected (e.g., navigating from Lobby), join immediately
+    if (socketService.isConnected()) {
+        setIsConnected(true);
+        joinRoomIfNeeded();
+    }
+
+    socket.on("disconnect", () => {
+        setIsConnected(false);
+        setErrorMessage("與伺服器連線中斷");
+    });
+
+    socket.on("game:error", (msg: string) => {
+        setErrorMessage(msg);
+        console.error("Game error:", msg);
+    });
 
     socket.on("game:state", (newState: GameStateDTO) => {
         const prev = prevGameRef.current;
@@ -143,9 +170,12 @@ export const GameCanvas: React.FC = () => {
         socket.off("disconnect");
         socket.off("game:state");
         socket.off("game:effect");
-        socketService.disconnect();
+        socket.off("game:error");
+        socket.off("room:created");
+        // Don't disconnect here - WebSocket should persist across page navigations
+        // socketService.disconnect() is now only called when leaving the room explicitly
     };
-  }, []);
+  }, [searchParams]);
 
   // Handle Mute Toggle
   useEffect(() => {
@@ -553,11 +583,33 @@ export const GameCanvas: React.FC = () => {
         </div>
       )}
       
-      {!isConnected && (
+      {(!isConnected || errorMessage) && (
           <div className="absolute inset-0 z-40 bg-black/50 flex items-center justify-center">
-              <div className="bg-gray-900 p-6 rounded-xl border border-red-500 text-center">
-                  <h2 className="text-red-500 text-xl font-bold mb-2">無法連線至後端伺服器</h2>
-                  <p className="text-gray-300 text-sm mb-4">請確認您的 Go 後端服務已在 Port 8080 啟動。</p>
+              <div className="bg-gray-900 p-6 rounded-xl border border-red-500 text-center max-w-md">
+                  <h2 className="text-red-500 text-xl font-bold mb-2">
+                      {!isConnected ? "無法連線至後端伺服器" : "發生錯誤"}
+                  </h2>
+                  <p className="text-gray-300 text-sm mb-4">
+                      {errorMessage || "請確認您的 Go 後端服務已在 Port 8080 啟動。"}
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                      <Button 
+                          variant="primary" 
+                          onClick={() => navigate('/lobby')}
+                          className="px-4 py-2"
+                      >
+                          返回大廳
+                      </Button>
+                      {!isConnected && (
+                          <Button 
+                              variant="secondary" 
+                              onClick={() => window.location.reload()}
+                              className="px-4 py-2"
+                          >
+                              重新連線
+                          </Button>
+                      )}
+                  </div>
               </div>
           </div>
       )}

@@ -4,9 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
+	"github.com/victor/mahjong-backend/internal/game/bot"
 	"github.com/victor/mahjong-backend/internal/game/mahjong"
 	"github.com/victor/mahjong-backend/internal/record"
 )
@@ -17,27 +20,29 @@ const (
 )
 
 var (
-	ErrRoomFull      = errors.New("room is full")
+	ErrRoomFull       = errors.New("room is full")
 	ErrGameInProgress = errors.New("game already in progress")
-	ErrNotYourTurn   = errors.New("not your turn")
-	ErrInvalidAction = errors.New("invalid action")
+	ErrNotYourTurn    = errors.New("not your turn")
+	ErrInvalidAction  = errors.New("invalid action")
 )
 
 type RoomSettings struct {
-	BaseScore int
-	TaiScore  int
-	Rounds    int
+	BaseScore     int
+	TaiScore      int
+	Rounds        int
+	AIPlayerCount int
 }
 
 type Room struct {
-	ID          string
-	Settings    RoomSettings
-	Players     []GameClient
-	State       *GameState
-	hub         GameHub
-	recordRepo  record.Repository
-	mu          sync.RWMutex
-	actionTimer *time.Timer
+	ID           string
+	Settings     RoomSettings
+	Players      []GameClient
+	State        *GameState
+	hub          GameHub
+	recordRepo   record.Repository
+	mu           sync.RWMutex
+	actionTimer  *time.Timer
+	discardTimer *time.Timer
 }
 
 type RoomManager struct {
@@ -135,11 +140,47 @@ func (r *Room) RemovePlayer(client GameClient) {
 	r.broadcastPlayerList()
 }
 
-func (r *Room) StartGame() {
+// AddAIPlayers adds AI players to fill the room up to 4 players
+func (r *Room) AddAIPlayers() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	currentCount := len(r.Players)
+	aiCount := r.Settings.AIPlayerCount
+	needed := MaxPlayersPerRoom - currentCount
+
+	// Don't add more AI than requested
+	if aiCount > needed {
+		aiCount = needed
+	}
+
+	// Generate unique bot IDs starting from a high number to avoid conflicts
+	botIDBase := uint(1000000) // Start from 1,000,000 to avoid conflicts with real user IDs
+
+	for i := 0; i < aiCount; i++ {
+		botID := botIDBase + uint(i)
+		botName := fmt.Sprintf("AI Player %d", i+1)
+		difficulty := "normal" // Default difficulty, could be made configurable
+
+		botClient := bot.NewBotClient(botID, botName, difficulty)
+		botClient.SetPlayerIndex(len(r.Players))
+		r.Players = append(r.Players, botClient)
+	}
+
+	// Notify all players
+	r.broadcastPlayerList()
+
+	// Auto-start when full
+	if len(r.Players) == MaxPlayersPerRoom {
+		go r.StartGame()
+	}
+}
+
+func (r *Room) StartGame() {
+	r.mu.Lock()
+
 	if len(r.Players) < MaxPlayersPerRoom {
+		r.mu.Unlock()
 		return
 	}
 
@@ -155,14 +196,36 @@ func (r *Room) StartGame() {
 	r.State = NewGameState(playerInfos, r.Settings)
 	r.State.StartInitPhase()
 
+	// Broadcast initial state (with dice and wind assignment)
+	r.mu.Unlock()
 	r.broadcastState()
+
+	// Wait 2 seconds for client animation, then deal cards
+	go func() {
+		log.Printf("[Room %s] Waiting 2 seconds before dealing cards...", r.ID)
+		time.Sleep(2 * time.Second)
+
+		r.mu.Lock()
+		if r.State != nil {
+			log.Printf("[Room %s] Dealing cards now", r.ID)
+			r.State.DealCards()
+			log.Printf("[Room %s] Cards dealt, phase is now: %s", r.ID, r.State.Phase)
+		} else {
+			log.Printf("[Room %s] State is nil, cannot deal cards", r.ID)
+		}
+		r.mu.Unlock()
+
+		// Broadcast state after dealing cards
+		r.broadcastState()
+		log.Printf("[Room %s] State broadcasted after dealing", r.ID)
+	}()
 }
 
 func (r *Room) Restart() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.State == nil || r.State.Phase != PhaseGameOver {
+		r.mu.Unlock()
 		return
 	}
 
@@ -177,12 +240,29 @@ func (r *Room) Restart() {
 	r.State = NewGameState(playerInfos, r.Settings)
 	r.State.StartInitPhase()
 
+	r.mu.Unlock()
 	r.broadcastState()
+
+	// Wait 2 seconds for client animation, then deal cards
+	go func() {
+		time.Sleep(2 * time.Second)
+
+		r.mu.Lock()
+		if r.State != nil {
+			r.State.DealCards()
+		}
+		r.mu.Unlock()
+
+		r.broadcastState()
+	}()
 }
 
 func (r *Room) HandleDiscard(client GameClient, tileIndex int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Stop auto-discard timer since player is taking action
+	r.stopDiscardTimer()
 
 	if r.State == nil {
 		return
@@ -273,17 +353,154 @@ func (r *Room) startActionTimer() {
 	})
 }
 
+// startDiscardTimer starts a timer for auto-discarding when human player doesn't respond
+func (r *Room) startDiscardTimer() {
+	// Only start timer during discard phase
+	if r.State == nil || r.State.Phase != PhaseDiscard {
+		return
+	}
+
+	// Stop any existing discard timer
+	if r.discardTimer != nil {
+		r.discardTimer.Stop()
+	}
+
+	currentPlayer := r.State.CurrentTurn
+
+	r.discardTimer = time.AfterFunc(ActionTimeout, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		// Check if still in discard phase and same player's turn
+		if r.State == nil || r.State.Phase != PhaseDiscard {
+			return
+		}
+
+		// Make sure it's still the same player's turn
+		if r.State.CurrentTurn != currentPlayer {
+			return
+		}
+
+		player := r.State.Players[currentPlayer]
+
+		// Auto-discard the last tile in hand (most recently drawn)
+		if len(player.Hand) > 0 {
+			lastTileIndex := len(player.Hand) - 1
+
+			// Perform discard
+			if err := r.State.Discard(currentPlayer, lastTileIndex); err == nil {
+				// First broadcast the discard state
+				for i, client := range r.Players {
+					personalDTO := r.State.ToPersonalDTO(i)
+					client.Send("game:state", personalDTO)
+				}
+				// Then check for interactions (this will handle next turn and broadcast)
+				r.checkInteractions()
+			}
+		}
+	})
+}
+
+// stopDiscardTimer stops the discard timer
+func (r *Room) stopDiscardTimer() {
+	if r.discardTimer != nil {
+		r.discardTimer.Stop()
+		r.discardTimer = nil
+	}
+}
+
 func (r *Room) broadcastState() {
-	dto := r.State.ToDTO()
-	
+	// Safety check
+	if r.State == nil {
+		return
+	}
+
 	// Send personalized state to each player
+	// Each player only sees their own hand, not others'
 	for i, client := range r.Players {
 		personalDTO := r.State.ToPersonalDTO(i)
 		client.Send("game:state", personalDTO)
 	}
 
-	// Also broadcast general state to room
-	r.hub.BroadcastToRoom(r.ID, "game:state", dto)
+	// Note: We don't broadcast general DTO to avoid overwriting personalized state
+	// The personalized state already includes all public information
+
+	// Only handle bot turns and timers during active game phases
+	if r.State.Phase == PhaseDiscard || r.State.Phase == PhaseResolveAction {
+		// Check if current player is a bot and trigger bot action
+		// If not a bot, start auto-discard timer for human player
+		if !r.handleBotTurn() {
+			r.startDiscardTimer()
+		}
+	}
+}
+
+// handleBotTurn checks if current player is a bot and triggers bot action
+// Returns true if current player is a bot, false otherwise
+func (r *Room) handleBotTurn() bool {
+	if r.State == nil {
+		return false
+	}
+
+	currentPlayerIdx := r.State.CurrentTurn
+	if currentPlayerIdx < 0 || currentPlayerIdx >= len(r.Players) {
+		return false
+	}
+
+	client := r.Players[currentPlayerIdx]
+
+	// Check if client is a bot using type assertion
+	botClient, isBot := client.(*bot.BotClient)
+	if !isBot {
+		return false // Not a bot, wait for human input
+	}
+
+	// Trigger bot decision (it will send action via GetAction)
+	// We need to send the state to the bot first
+	personalDTO := r.State.ToPersonalDTO(currentPlayerIdx)
+	botClient.Send("game:state", personalDTO)
+
+	// Wait for bot to process and check for action periodically
+	go func() {
+		maxWait := 3 * time.Second // Maximum wait time
+		checkInterval := 100 * time.Millisecond
+		elapsed := time.Duration(0)
+
+		for elapsed < maxWait {
+			time.Sleep(checkInterval)
+			elapsed += checkInterval
+
+			actionType, actionData, hasAction := botClient.GetAction()
+			if !hasAction {
+				continue
+			}
+
+			// Check if it's still the bot's turn before processing action
+			r.mu.RLock()
+			isStillBotTurn := r.State != nil && r.State.CurrentTurn == currentPlayerIdx
+			r.mu.RUnlock()
+
+			if !isStillBotTurn {
+				return
+			}
+
+			// Call HandleDiscard/HandleOperation WITHOUT holding the lock
+			// These methods will acquire their own locks
+			switch actionType {
+			case "discard":
+				if tileIndex, ok := actionData.(int); ok {
+					r.HandleDiscard(botClient, tileIndex)
+				}
+			case "operation":
+				if action, ok := actionData.(string); ok {
+					r.HandleOperation(botClient, action)
+				}
+			}
+			return
+		}
+	}()
+
+	return true // Current player is a bot
 }
 
 func (r *Room) broadcastPlayerList() {
@@ -304,10 +521,10 @@ func (r *Room) broadcastPlayerList() {
 
 func (r *Room) broadcastEffect(effectType, text string, playerIndex int, variant string, tile *mahjong.Tile) {
 	effect := map[string]interface{}{
-		"type":         effectType,
-		"text":         text,
-		"playerIndex":  playerIndex,
-		"variant":      variant,
+		"type":        effectType,
+		"text":        text,
+		"playerIndex": playerIndex,
+		"variant":     variant,
 	}
 	if tile != nil {
 		effect["tile"] = tile.ToDTO()
@@ -349,3 +566,33 @@ func (r *Room) saveGameRecord() {
 	r.recordRepo.Create(gameRecord)
 }
 
+// GetState returns the current game state (thread-safe)
+func (r *Room) GetState() *GameState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.State
+}
+
+// HasPlayer checks if a user is already in the room (thread-safe)
+func (r *Room) HasPlayer(userID uint) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, p := range r.Players {
+		if p.GetUserID() == userID {
+			return true
+		}
+	}
+	return false
+}
+
+// GetPlayerIndex returns the player index for a user, or -1 if not found (thread-safe)
+func (r *Room) GetPlayerIndex(userID uint) int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for i, p := range r.Players {
+		if p.GetUserID() == userID {
+			return i
+		}
+	}
+	return -1
+}

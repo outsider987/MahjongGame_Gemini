@@ -52,9 +52,9 @@ class SocketService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return this;
     }
-
-    if (authToken) {
-      this.token = authToken;
+    const token = localStorage.getItem('mahjong_auth_token');
+    if (token) {
+      this.token = token;
     }
 
     // Use mock mode for development
@@ -116,7 +116,10 @@ class SocketService {
     this.mockSocket.on("game:state", (state: any) => this.emit("game:state", state));
     this.mockSocket.on("game:effect", (effect: any) => this.emit("game:effect", effect));
     this.mockSocket.on("game:error", (msg: string) => this.emit("game:error", msg));
-    
+    const token = localStorage.getItem('mahjong_auth_token');
+    if (token) {
+      this.connect(token);
+    }
     // Trigger connection
     this.mockBackend.connect();
   }
@@ -193,8 +196,8 @@ class SocketService {
     this.send("action:quickmatch");
   }
 
-  public createRoom(baseScore = 100, taiScore = 20, rounds = 1) {
-    this.send("action:create_room", { baseScore, taiScore, rounds });
+  public createRoom(baseScore = 100, taiScore = 20, rounds = 1, aiPlayerCount = 0) {
+    this.send("action:create_room", { baseScore, taiScore, rounds, aiPlayerCount });
   }
 
   public sendDiscard(tileIndex: number) {
