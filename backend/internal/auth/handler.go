@@ -12,10 +12,10 @@ import (
 )
 
 type Handler struct {
-	authService     Service
-	lineService     *LINEService
-	userService     user.Service
-	stateStore      map[string]bool // In production, use Redis
+	authService Service
+	lineService *LINEService
+	userService user.Service
+	stateStore  map[string]bool // In production, use Redis
 }
 
 func NewHandler(authService Service, lineService *LINEService, userService user.Service) *Handler {
@@ -28,8 +28,8 @@ func NewHandler(authService Service, lineService *LINEService, userService user.
 }
 
 type AuthResponse struct {
-	Token string           `json:"token"`
-	User  user.PublicUser  `json:"user"`
+	Token string          `json:"token"`
+	User  user.PublicUser `json:"user"`
 }
 
 // Register handles user registration
@@ -199,4 +199,3 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 
 	response.Success(c, u.ToPublic())
 }
-

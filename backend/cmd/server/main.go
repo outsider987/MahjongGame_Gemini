@@ -30,6 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	sugar.Infof("Config loaded. Database Host: %s, Port: %s", cfg.Database.Host, cfg.Database.Port)
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)

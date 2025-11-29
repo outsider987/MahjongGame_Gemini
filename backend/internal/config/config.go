@@ -1,112 +1,169 @@
 package config
 
 import (
-	"fmt"
-	"strings"
+	"log"
+	"os"
+	"strconv"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	LINE     LINEConfig
-}
-
-type ServerConfig struct {
-	Port string
-	Mode string // debug, release, test
-}
-
-type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-}
-
-type JWTConfig struct {
-	Secret          string
-	ExpirationHours int
-}
-
-type LINEConfig struct {
-	ChannelID     string
-	ChannelSecret string
-	CallbackURL   string
+	Server   ServerConfig   `mapstructure:"server"`
+	Database DatabaseConfig `mapstructure:"database"`
+	JWT      JWTConfig      `mapstructure:"jwt"`
+	LINE     LINEConfig     `mapstructure:"line"`
 }
 
 func (d *DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		d.User, d.Password, d.Host, d.Port, d.Name)
+	return d.User + ":" + d.Password + "@tcp(" + d.Host + ":" + d.Port + ")/" + d.Name +
+		"?charset=utf8mb4&parseTime=True&loc=Local"
 }
 
+type ServerConfig struct {
+	Port string `mapstructure:"port"`
+	Mode string `mapstructure:"mode"`
+}
+
+type DatabaseConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     string `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Name     string `mapstructure:"name"`
+}
+
+type JWTConfig struct {
+	Secret          string `mapstructure:"secret"`
+	ExpirationHours int    `mapstructure:"expirationHours"`
+}
+
+type LINEConfig struct {
+	ChannelID     string `mapstructure:"channelId"`
+	ChannelSecret string `mapstructure:"channelSecret"`
+	CallbackURL   string `mapstructure:"callbackUrl"`
+}
+
+var globalConfig *Config
+
+// Load returns cached config or initializes one
 func Load() (*Config, error) {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./config")
-
-	// Environment variable support
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-
-	// Set defaults
-	viper.SetDefault("server.port", "8080")
-	viper.SetDefault("server.mode", "debug")
-	viper.SetDefault("database.host", "localhost")
-	viper.SetDefault("database.port", "3306")
-	viper.SetDefault("database.user", "mahjong")
-	viper.SetDefault("database.password", "mahjong_secret")
-	viper.SetDefault("database.name", "mahjong_db")
-	viper.SetDefault("jwt.secret", "your-super-secret-key-change-in-production")
-	viper.SetDefault("jwt.expirationHours", 72)
-	viper.SetDefault("line.channelId", "")
-	viper.SetDefault("line.channelSecret", "")
-	viper.SetDefault("line.callbackUrl", "http://localhost:8080/api/auth/line/callback")
-
-	// Try to read config file (optional)
-	_ = viper.ReadInConfig()
-
-	// Bind environment variables explicitly
-	viper.BindEnv("server.port", "SERVER_PORT")
-	viper.BindEnv("server.mode", "SERVER_MODE")
-	viper.BindEnv("database.host", "DB_HOST")
-	viper.BindEnv("database.port", "DB_PORT")
-	viper.BindEnv("database.user", "DB_USER")
-	viper.BindEnv("database.password", "DB_PASSWORD")
-	viper.BindEnv("database.name", "DB_NAME")
-	viper.BindEnv("jwt.secret", "JWT_SECRET")
-	viper.BindEnv("jwt.expirationHours", "JWT_EXPIRATION_HOURS")
-	viper.BindEnv("line.channelId", "LINE_CHANNEL_ID")
-	viper.BindEnv("line.channelSecret", "LINE_CHANNEL_SECRET")
-	viper.BindEnv("line.callbackUrl", "LINE_CALLBACK_URL")
-
-	config := &Config{
-		Server: ServerConfig{
-			Port: viper.GetString("server.port"),
-			Mode: viper.GetString("server.mode"),
-		},
-		Database: DatabaseConfig{
-			Host:     viper.GetString("database.host"),
-			Port:     viper.GetString("database.port"),
-			User:     viper.GetString("database.user"),
-			Password: viper.GetString("database.password"),
-			Name:     viper.GetString("database.name"),
-		},
-		JWT: JWTConfig{
-			Secret:          viper.GetString("jwt.secret"),
-			ExpirationHours: viper.GetInt("jwt.expirationHours"),
-		},
-		LINE: LINEConfig{
-			ChannelID:     viper.GetString("line.channelId"),
-			ChannelSecret: viper.GetString("line.channelSecret"),
-			CallbackURL:   viper.GetString("line.callbackUrl"),
-		},
+	if globalConfig != nil {
+		return globalConfig, nil
 	}
 
-	return config, nil
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+
+	// search possible locations
+
+	v.AddConfigPath(".")      // root
+	v.AddConfigPath("../../") // backend root
+
+	v.AddConfigPath("/app") // docker image
+	// v.AddConfigPath("/etc/mahjong/") // optional server path
+
+	// read config.yaml if exists
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Printf("⚠️ No config.yaml found, using env + defaults")
+		} else {
+			log.Printf("❌ Failed to parse config file: %v", err)
+		}
+	}
+
+	cfg := &Config{}
+
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, err
+	}
+
+	applyEnvOverrides(cfg)
+	applyDefaults(cfg)
+
+	// ---------------------
+	// 🔥 Hot Reload Enabled
+	// ---------------------
+	v.WatchConfig()
+	v.OnConfigChange(func(e fsnotify.Event) {
+		log.Println("🔄 config.yaml changed → reloading")
+
+		if err := v.Unmarshal(cfg); err != nil {
+			log.Printf("⚠️ Reload error: %v", err)
+		} else {
+			log.Println("✓ Config reloaded")
+		}
+	})
+
+	globalConfig = cfg
+	return cfg, nil
 }
 
+// Apply env vars on top of file config
+func applyEnvOverrides(cfg *Config) {
+	override := func(target *string, key string) {
+		if val, ok := os.LookupEnv(key); ok {
+			*target = val
+		}
+	}
+
+	override(&cfg.Server.Port, "SERVER_PORT")
+	override(&cfg.Server.Mode, "SERVER_MODE")
+
+	override(&cfg.Database.Host, "DB_HOST")
+	override(&cfg.Database.Port, "DB_PORT")
+	override(&cfg.Database.User, "DB_USER")
+	override(&cfg.Database.Password, "DB_PASSWORD")
+	override(&cfg.Database.Name, "DB_NAME")
+
+	override(&cfg.JWT.Secret, "JWT_SECRET")
+
+	if val, ok := os.LookupEnv("JWT_EXPIRATION_HOURS"); ok {
+		if n, err := strconv.Atoi(val); err == nil {
+			cfg.JWT.ExpirationHours = n
+		}
+	}
+
+	override(&cfg.LINE.ChannelID, "LINE_CHANNEL_ID")
+	override(&cfg.LINE.ChannelSecret, "LINE_CHANNEL_SECRET")
+	override(&cfg.LINE.CallbackURL, "LINE_CALLBACK_URL")
+}
+
+// default values when missing
+func applyDefaults(cfg *Config) {
+	if cfg.Server.Port == "" {
+		cfg.Server.Port = "8080"
+	}
+	if cfg.Server.Mode == "" {
+		cfg.Server.Mode = "debug"
+	}
+
+	if cfg.Database.Host == "" {
+		cfg.Database.Host = "localhost"
+	}
+	if cfg.Database.Port == "" {
+		cfg.Database.Port = "3306"
+	}
+	if cfg.Database.User == "" {
+		cfg.Database.User = "mahjong"
+	}
+	if cfg.Database.Password == "" {
+		cfg.Database.Password = "mahjong_secret"
+	}
+	if cfg.Database.Name == "" {
+		cfg.Database.Name = "mahjong_db"
+	}
+
+	if cfg.JWT.Secret == "" {
+		cfg.JWT.Secret = "replace-me"
+	}
+	if cfg.JWT.ExpirationHours == 0 {
+		cfg.JWT.ExpirationHours = 72
+	}
+
+	if cfg.LINE.CallbackURL == "" {
+		cfg.LINE.CallbackURL = "http://localhost:8080/api/auth/line/callback"
+	}
+}

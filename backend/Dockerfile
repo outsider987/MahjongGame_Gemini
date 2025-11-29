@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
@@ -7,18 +7,15 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Copy go mod files first
-COPY go.mod ./
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy source code
+# Copy entire backend source code
 COPY . .
 
-# Generate go.sum and verify dependencies
-RUN go mod tidy && go mod verify
-
-# Build the application
+# Build application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
 
 # Final stage
@@ -26,21 +23,20 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates tzdata
 
-# Copy binary from builder
+# Copy built binary
 COPY --from=builder /app/main .
+
+# Copy migrations folder (correct name)
 COPY --from=builder /app/migrations ./migrations
 
-# Copy config.yaml to load configuration
+# Copy configuration
 COPY --from=builder /app/config.yaml ./config.yaml
 
-# Expose port
+# Set ENV path
+ENV CONFIG_FILE=/app/config.yaml
+
 EXPOSE 8080
 
-# Run the application
-# Configuration will be loaded from config.yaml
-# Environment variables can still override config.yaml values if needed
 CMD ["./main"]
-

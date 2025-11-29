@@ -16,5 +16,5 @@ jwt:
 line:
   channelId: ""
   channelSecret: ""
-  callbackUrl: "http://localhost:8080/api/auth/line/callback"
+  callbackUrl: "https://line-login-demo-lyart.vercel.app/api/line-callback"
 
