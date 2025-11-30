@@ -25,9 +25,9 @@ dist-ssr
 
 #go related
 go.sum
-go.mod
+
 backend/go.sum
-backend/go.mod
+
 backend/config.yaml
 
 # environment variables
